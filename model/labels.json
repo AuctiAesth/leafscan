@@ -1,0 +1,902 @@
+[
+ {
+  "id": "apple/black-rot",
+  "plant": "apple",
+  "condition": "black-rot",
+  "healthy": false
+ },
+ {
+  "id": "apple/healthy",
+  "plant": "apple",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "apple/mosaic",
+  "plant": "apple",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "apple/rust",
+  "plant": "apple",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "apple/scab",
+  "plant": "apple",
+  "condition": "scab",
+  "healthy": false
+ },
+ {
+  "id": "banana/anthracnose",
+  "plant": "banana",
+  "condition": "anthracnose",
+  "healthy": false
+ },
+ {
+  "id": "banana/black-leaf-streak",
+  "plant": "banana",
+  "condition": "black-leaf-streak",
+  "healthy": false
+ },
+ {
+  "id": "banana/bunchy-top",
+  "plant": "banana",
+  "condition": "bunchy-top",
+  "healthy": false
+ },
+ {
+  "id": "banana/cigar-end-rot",
+  "plant": "banana",
+  "condition": "cigar-end-rot",
+  "healthy": false
+ },
+ {
+  "id": "banana/cordana-leaf-spot",
+  "plant": "banana",
+  "condition": "cordana-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "banana/healthy",
+  "plant": "banana",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "banana/panama-disease",
+  "plant": "banana",
+  "condition": "panama-disease",
+  "healthy": false
+ },
+ {
+  "id": "basil/downy-mildew",
+  "plant": "basil",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "basil/healthy",
+  "plant": "basil",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "bean/halo-blight",
+  "plant": "bean",
+  "condition": "halo-blight",
+  "healthy": false
+ },
+ {
+  "id": "bean/healthy",
+  "plant": "bean",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "bean/mosaic",
+  "plant": "bean",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "bean/rust",
+  "plant": "bean",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "bell_pepper/bacterial-spot",
+  "plant": "bell_pepper",
+  "condition": "bacterial-spot",
+  "healthy": false
+ },
+ {
+  "id": "bell_pepper/blossom-end-rot",
+  "plant": "bell_pepper",
+  "condition": "blossom-end-rot",
+  "healthy": false
+ },
+ {
+  "id": "bell_pepper/frogeye-leaf-spot",
+  "plant": "bell_pepper",
+  "condition": "frogeye-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "bell_pepper/healthy",
+  "plant": "bell_pepper",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "bell_pepper/powdery-mildew",
+  "plant": "bell_pepper",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "blueberry/anthracnose",
+  "plant": "blueberry",
+  "condition": "anthracnose",
+  "healthy": false
+ },
+ {
+  "id": "blueberry/botrytis-blight",
+  "plant": "blueberry",
+  "condition": "botrytis-blight",
+  "healthy": false
+ },
+ {
+  "id": "blueberry/healthy",
+  "plant": "blueberry",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "blueberry/mummy-berry",
+  "plant": "blueberry",
+  "condition": "mummy-berry",
+  "healthy": false
+ },
+ {
+  "id": "blueberry/rust",
+  "plant": "blueberry",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "blueberry/scorch",
+  "plant": "blueberry",
+  "condition": "scorch",
+  "healthy": false
+ },
+ {
+  "id": "broccoli/alternaria-leaf-spot",
+  "plant": "broccoli",
+  "condition": "alternaria-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "broccoli/downy-mildew",
+  "plant": "broccoli",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "broccoli/healthy",
+  "plant": "broccoli",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "broccoli/ring-spot",
+  "plant": "broccoli",
+  "condition": "ring-spot",
+  "healthy": false
+ },
+ {
+  "id": "cabbage/alternaria-leaf-spot",
+  "plant": "cabbage",
+  "condition": "alternaria-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "cabbage/black-rot",
+  "plant": "cabbage",
+  "condition": "black-rot",
+  "healthy": false
+ },
+ {
+  "id": "cabbage/downy-mildew",
+  "plant": "cabbage",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "cabbage/healthy",
+  "plant": "cabbage",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "carrot/alternaria-leaf-blight",
+  "plant": "carrot",
+  "condition": "alternaria-leaf-blight",
+  "healthy": false
+ },
+ {
+  "id": "carrot/cavity-spot",
+  "plant": "carrot",
+  "condition": "cavity-spot",
+  "healthy": false
+ },
+ {
+  "id": "carrot/cercospora-leaf-blight",
+  "plant": "carrot",
+  "condition": "cercospora-leaf-blight",
+  "healthy": false
+ },
+ {
+  "id": "cauliflower/alternaria-leaf-spot",
+  "plant": "cauliflower",
+  "condition": "alternaria-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "cauliflower/bacterial-soft-rot",
+  "plant": "cauliflower",
+  "condition": "bacterial-soft-rot",
+  "healthy": false
+ },
+ {
+  "id": "cauliflower/healthy",
+  "plant": "cauliflower",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "celery/anthracnose",
+  "plant": "celery",
+  "condition": "anthracnose",
+  "healthy": false
+ },
+ {
+  "id": "celery/early-blight",
+  "plant": "celery",
+  "condition": "early-blight",
+  "healthy": false
+ },
+ {
+  "id": "celery/healthy",
+  "plant": "celery",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "cherry/healthy",
+  "plant": "cherry",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "cherry/leaf-spot",
+  "plant": "cherry",
+  "condition": "leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "cherry/powdery-mildew",
+  "plant": "cherry",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "citrus/canker",
+  "plant": "citrus",
+  "condition": "canker",
+  "healthy": false
+ },
+ {
+  "id": "citrus/greening",
+  "plant": "citrus",
+  "condition": "greening",
+  "healthy": false
+ },
+ {
+  "id": "coffee/berry-blotch",
+  "plant": "coffee",
+  "condition": "berry-blotch",
+  "healthy": false
+ },
+ {
+  "id": "coffee/black-rot",
+  "plant": "coffee",
+  "condition": "black-rot",
+  "healthy": false
+ },
+ {
+  "id": "coffee/brown-eye-spot",
+  "plant": "coffee",
+  "condition": "brown-eye-spot",
+  "healthy": false
+ },
+ {
+  "id": "coffee/healthy",
+  "plant": "coffee",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "coffee/leaf-rust",
+  "plant": "coffee",
+  "condition": "leaf-rust",
+  "healthy": false
+ },
+ {
+  "id": "corn/gray-leaf-spot",
+  "plant": "corn",
+  "condition": "gray-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "corn/healthy",
+  "plant": "corn",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "corn/northern-leaf-blight",
+  "plant": "corn",
+  "condition": "northern-leaf-blight",
+  "healthy": false
+ },
+ {
+  "id": "corn/rust",
+  "plant": "corn",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "corn/smut",
+  "plant": "corn",
+  "condition": "smut",
+  "healthy": false
+ },
+ {
+  "id": "cucumber/angular-leaf-spot",
+  "plant": "cucumber",
+  "condition": "angular-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "cucumber/bacterial-wilt",
+  "plant": "cucumber",
+  "condition": "bacterial-wilt",
+  "healthy": false
+ },
+ {
+  "id": "cucumber/healthy",
+  "plant": "cucumber",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "cucumber/powdery-mildew",
+  "plant": "cucumber",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/cercospora-leaf-spot",
+  "plant": "eggplant",
+  "condition": "cercospora-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/healthy",
+  "plant": "eggplant",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "eggplant/phomopsis-fruit-rot",
+  "plant": "eggplant",
+  "condition": "phomopsis-fruit-rot",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/phytophthora-blight",
+  "plant": "eggplant",
+  "condition": "phytophthora-blight",
+  "healthy": false
+ },
+ {
+  "id": "garlic/healthy",
+  "plant": "garlic",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "garlic/leaf-blight",
+  "plant": "garlic",
+  "condition": "leaf-blight",
+  "healthy": false
+ },
+ {
+  "id": "garlic/rust",
+  "plant": "garlic",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "ginger/healthy",
+  "plant": "ginger",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "ginger/leaf-spot",
+  "plant": "ginger",
+  "condition": "leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "ginger/sheath-blight",
+  "plant": "ginger",
+  "condition": "sheath-blight",
+  "healthy": false
+ },
+ {
+  "id": "grape/black-rot",
+  "plant": "grape",
+  "condition": "black-rot",
+  "healthy": false
+ },
+ {
+  "id": "grape/downy-mildew",
+  "plant": "grape",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "grape/esca",
+  "plant": "grape",
+  "condition": "esca",
+  "healthy": false
+ },
+ {
+  "id": "grape/healthy",
+  "plant": "grape",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "grape/isariopsis-leaf-spot",
+  "plant": "grape",
+  "condition": "isariopsis-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "grape/leaf-spot",
+  "plant": "grape",
+  "condition": "leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "grape/leafroll",
+  "plant": "grape",
+  "condition": "leafroll",
+  "healthy": false
+ },
+ {
+  "id": "lettuce/downy-mildew",
+  "plant": "lettuce",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "lettuce/healthy",
+  "plant": "lettuce",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "lettuce/mosaic",
+  "plant": "lettuce",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "maple/healthy",
+  "plant": "maple",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "maple/tar-spot",
+  "plant": "maple",
+  "condition": "tar-spot",
+  "healthy": false
+ },
+ {
+  "id": "peach/anthracnose",
+  "plant": "peach",
+  "condition": "anthracnose",
+  "healthy": false
+ },
+ {
+  "id": "peach/bacterial-spot",
+  "plant": "peach",
+  "condition": "bacterial-spot",
+  "healthy": false
+ },
+ {
+  "id": "peach/brown-rot",
+  "plant": "peach",
+  "condition": "brown-rot",
+  "healthy": false
+ },
+ {
+  "id": "peach/healthy",
+  "plant": "peach",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "peach/leaf-curl",
+  "plant": "peach",
+  "condition": "leaf-curl",
+  "healthy": false
+ },
+ {
+  "id": "peach/rust",
+  "plant": "peach",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "peach/scab",
+  "plant": "peach",
+  "condition": "scab",
+  "healthy": false
+ },
+ {
+  "id": "plum/bacterial-spot",
+  "plant": "plum",
+  "condition": "bacterial-spot",
+  "healthy": false
+ },
+ {
+  "id": "plum/brown-rot",
+  "plant": "plum",
+  "condition": "brown-rot",
+  "healthy": false
+ },
+ {
+  "id": "plum/healthy",
+  "plant": "plum",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "plum/pocket",
+  "plant": "plum",
+  "condition": "pocket",
+  "healthy": false
+ },
+ {
+  "id": "plum/pox",
+  "plant": "plum",
+  "condition": "pox",
+  "healthy": false
+ },
+ {
+  "id": "plum/rust",
+  "plant": "plum",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "potato/early-blight",
+  "plant": "potato",
+  "condition": "early-blight",
+  "healthy": false
+ },
+ {
+  "id": "potato/healthy",
+  "plant": "potato",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "potato/late-blight",
+  "plant": "potato",
+  "condition": "late-blight",
+  "healthy": false
+ },
+ {
+  "id": "raspberry/fire-blight",
+  "plant": "raspberry",
+  "condition": "fire-blight",
+  "healthy": false
+ },
+ {
+  "id": "raspberry/gray-mold",
+  "plant": "raspberry",
+  "condition": "gray-mold",
+  "healthy": false
+ },
+ {
+  "id": "raspberry/healthy",
+  "plant": "raspberry",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "raspberry/leaf-spot",
+  "plant": "raspberry",
+  "condition": "leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "raspberry/yellow-rust",
+  "plant": "raspberry",
+  "condition": "yellow-rust",
+  "healthy": false
+ },
+ {
+  "id": "rice/blast",
+  "plant": "rice",
+  "condition": "blast",
+  "healthy": false
+ },
+ {
+  "id": "rice/healthy",
+  "plant": "rice",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "rice/sheath-blight",
+  "plant": "rice",
+  "condition": "sheath-blight",
+  "healthy": false
+ },
+ {
+  "id": "soybean/bacterial-blight",
+  "plant": "soybean",
+  "condition": "bacterial-blight",
+  "healthy": false
+ },
+ {
+  "id": "soybean/brown-spot",
+  "plant": "soybean",
+  "condition": "brown-spot",
+  "healthy": false
+ },
+ {
+  "id": "soybean/downy-mildew",
+  "plant": "soybean",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "soybean/frogeye-leaf-spot",
+  "plant": "soybean",
+  "condition": "frogeye-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "soybean/healthy",
+  "plant": "soybean",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "soybean/mosaic",
+  "plant": "soybean",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "soybean/rust",
+  "plant": "soybean",
+  "condition": "rust",
+  "healthy": false
+ },
+ {
+  "id": "squash/healthy",
+  "plant": "squash",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "squash/powdery-mildew",
+  "plant": "squash",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "strawberry/anthracnose",
+  "plant": "strawberry",
+  "condition": "anthracnose",
+  "healthy": false
+ },
+ {
+  "id": "strawberry/healthy",
+  "plant": "strawberry",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "strawberry/leaf-scorch",
+  "plant": "strawberry",
+  "condition": "leaf-scorch",
+  "healthy": false
+ },
+ {
+  "id": "tobacco/blue-mold",
+  "plant": "tobacco",
+  "condition": "blue-mold",
+  "healthy": false
+ },
+ {
+  "id": "tobacco/brown-spot",
+  "plant": "tobacco",
+  "condition": "brown-spot",
+  "healthy": false
+ },
+ {
+  "id": "tobacco/frogeye-leaf-spot",
+  "plant": "tobacco",
+  "condition": "frogeye-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "tobacco/healthy",
+  "plant": "tobacco",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "tobacco/mosaic",
+  "plant": "tobacco",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "tomato/bacterial-spot",
+  "plant": "tomato",
+  "condition": "bacterial-spot",
+  "healthy": false
+ },
+ {
+  "id": "tomato/early-blight",
+  "plant": "tomato",
+  "condition": "early-blight",
+  "healthy": false
+ },
+ {
+  "id": "tomato/healthy",
+  "plant": "tomato",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "tomato/late-blight",
+  "plant": "tomato",
+  "condition": "late-blight",
+  "healthy": false
+ },
+ {
+  "id": "tomato/leaf-mold",
+  "plant": "tomato",
+  "condition": "leaf-mold",
+  "healthy": false
+ },
+ {
+  "id": "tomato/mosaic",
+  "plant": "tomato",
+  "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "tomato/septoria-leaf-spot",
+  "plant": "tomato",
+  "condition": "septoria-leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "tomato/spider-mite",
+  "plant": "tomato",
+  "condition": "spider-mite",
+  "healthy": false
+ },
+ {
+  "id": "tomato/target-spot",
+  "plant": "tomato",
+  "condition": "target-spot",
+  "healthy": false
+ },
+ {
+  "id": "tomato/yellow-leaf-curl",
+  "plant": "tomato",
+  "condition": "yellow-leaf-curl",
+  "healthy": false
+ },
+ {
+  "id": "wheat/bacterial-leaf-streak",
+  "plant": "wheat",
+  "condition": "bacterial-leaf-streak",
+  "healthy": false
+ },
+ {
+  "id": "wheat/head-scab",
+  "plant": "wheat",
+  "condition": "head-scab",
+  "healthy": false
+ },
+ {
+  "id": "wheat/leaf-rust",
+  "plant": "wheat",
+  "condition": "leaf-rust",
+  "healthy": false
+ },
+ {
+  "id": "wheat/loose-smut",
+  "plant": "wheat",
+  "condition": "loose-smut",
+  "healthy": false
+ },
+ {
+  "id": "wheat/powdery-mildew",
+  "plant": "wheat",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "wheat/septoria-blotch",
+  "plant": "wheat",
+  "condition": "septoria-blotch",
+  "healthy": false
+ },
+ {
+  "id": "wheat/stem-rust",
+  "plant": "wheat",
+  "condition": "stem-rust",
+  "healthy": false
+ },
+ {
+  "id": "wheat/stripe-rust",
+  "plant": "wheat",
+  "condition": "stripe-rust",
+  "healthy": false
+ },
+ {
+  "id": "zucchini/bacterial-wilt",
+  "plant": "zucchini",
+  "condition": "bacterial-wilt",
+  "healthy": false
+ },
+ {
+  "id": "zucchini/downy-mildew",
+  "plant": "zucchini",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "zucchini/powdery-mildew",
+  "plant": "zucchini",
+  "condition": "powdery-mildew",
+  "healthy": false
+ },
+ {
+  "id": "zucchini/yellow-mosaic",
+  "plant": "zucchini",
+  "condition": "yellow-mosaic",
+  "healthy": false
+ }
+]

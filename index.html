@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LeafScan: Plant Disease Detector</title>
+  <meta name="description" content="Take or upload a photo of a leaf to detect plant diseases on your device, even offline.">
+  <meta name="theme-color" content="#1f7a4d" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1a14" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="LeafScan">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="32" height="32">
+      <div>
+        <h1>LeafScan</h1>
+        <p class="tagline">Plant disease detection by image recognition</p>
+      </div>
+    </div>
+    <button id="installBtn" class="btn btn-ghost" hidden>Install app</button>
+  </header>
+
+  <main>
+    <section class="card" id="scanCard" aria-labelledby="scanTitle">
+      <h2 id="scanTitle" class="visually-hidden">Scan a leaf</h2>
+
+      <div id="dropzone" class="dropzone" tabindex="0" aria-label="Drop a leaf photo here">
+        <div id="emptyState" class="empty">
+          <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true"><path d="M52 10C30 10 14 22 14 40c0 4 1 8 3 11 2-9 9-18 20-24-8 6-14 14-16 25 3 2 7 3 11 3 18 0 22-23 20-45z" fill="currentColor" opacity=".9"/></svg>
+          <p class="empty-title">Take or upload a photo of one leaf</p>
+          <p class="empty-sub" id="emptySub">The photo never leaves your device.</p>
+        </div>
+        <div id="previewWrap" class="preview" hidden>
+          <canvas id="previewCanvas"></canvas>
+          <div id="cropBox" class="cropbox" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div id="zoomRow" class="zoom" hidden>
+        <label for="zoom">Zoom on the leaf</label>
+        <input id="zoom" type="range" min="1" max="3" step="0.1" value="1">
+        <output id="zoomOut" for="zoom">1.0×</output>
+      </div>
+
+      <div class="actions">
+        <button id="cameraBtn" class="btn btn-primary" disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
+          Take photo
+        </button>
+        <button id="uploadBtn" class="btn btn-secondary" disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3 7 8h3v6h4V8h3l-5-5zM4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3h-2v3H6v-3H4z" fill="currentColor"/></svg>
+          Upload image
+        </button>
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+        <input id="fileInput" type="file" accept="image/*" hidden>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite">Loading the AI model…</p>
+      <div id="progress" class="progress" aria-hidden="true"><span></span></div>
+    </section>
+
+    <section class="card result" id="resultCard" hidden aria-live="polite" aria-labelledby="resultName">
+      <div class="result-head">
+        <span id="resultChip" class="chip"></span>
+        <span id="resultTime" class="muted small"></span>
+      </div>
+      <p id="resultPlant" class="result-plant"></p>
+      <h2 id="resultName" class="result-name"></h2>
+      <p id="resultSci" class="result-sci"></p>
+      <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" id="resultMeter">
+        <span id="resultBar"></span>
+      </div>
+      <p id="resultConf" class="small"></p>
+      <p id="resultWarning" class="warning" hidden></p>
+
+      <div id="confirmBox" class="confirm" hidden>
+        <h3>Help narrow it down</h3>
+        <p class="small muted">Look closely at the leaf and answer what you can. Your answers re-rank the possibilities.</p>
+        <ol id="confirmList" class="confirm-list"></ol>
+        <p id="confirmResult" class="small" hidden></p>
+      </div>
+
+      <div id="resultDetails">
+        <h3 id="symptomsTitle">What it looks like</h3>
+        <p id="resultSymptoms"></p>
+        <h3 id="lookTitle">Check the leaf for</h3>
+        <ul id="resultLook" class="plainlist"></ul>
+        <h3 id="manageTitle">What you can do</h3>
+        <ul id="resultManage" class="checklist"></ul>
+        <div id="sourcesBox">
+          <h3>Expert sources</h3>
+          <ul id="resultSources" class="sources"></ul>
+          <p id="resultNote" class="small muted"></p>
+        </div>
+      </div>
+
+      <h3>Other possibilities</h3>
+      <ol id="resultOthers" class="others"></ol>
+      <p class="disclaimer">This is a research prototype. Before you spray or remove plants, confirm the diagnosis with an agricultural technician (for example your Municipal Agriculture Office), and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+    </section>
+
+    <section class="card" id="historyCard" hidden>
+      <div class="row-between">
+        <h2>Recent scans</h2>
+        <button id="clearHistory" class="btn btn-ghost small">Clear</button>
+      </div>
+      <ul id="historyList" class="history"></ul>
+    </section>
+
+    <section class="card tips">
+      <h2>Tips for an accurate result</h2>
+      <ul>
+        <li><b>One leaf</b>, filling most of the square.</li>
+        <li><b>Plain background</b> such as paper, a table or your palm.</li>
+        <li><b>Good, even light</b>: shade or indoors near a window, no harsh shadows.</li>
+        <li><b>Sharp focus</b>: tap the leaf on your screen before taking the photo.</li>
+        <li>Show the <b>side with the spots</b> or discoloration.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Supported plants</h2>
+      <ul id="cropList" class="crops"></ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. Runs fully on your device with ONNX Runtime Web. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF.</p>
+    <p id="offlineNote" class="muted small"></p>
+  </footer>
+
+  <dialog id="cameraDialog" class="camera-dialog">
+    <video id="cameraVideo" playsinline autoplay muted></video>
+    <div class="camera-guide" aria-hidden="true"></div>
+    <div class="camera-actions">
+      <button id="cameraCancel" class="btn btn-ghost-light">Cancel</button>
+      <button id="cameraShutter" class="shutter" aria-label="Capture photo"></button>
+      <button id="cameraSwitch" class="btn btn-ghost-light">Switch</button>
+    </div>
+  </dialog>
+
+  <script src="vendor/ort.wasm.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
