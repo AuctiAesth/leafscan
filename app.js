@@ -751,8 +751,8 @@
     if (chem.length) {
       el.chemNote.hidden = false;
       el.chemNote.textContent = band === 'confident'
-        ? 'Before using any pesticide, ask your Municipal Agriculture Office. Use only FPA-registered products and follow the label dose and the waiting time before harvest.'
-        : 'Chemical options are hidden until the diagnosis is confirmed. Ask an agricultural technician before using any pesticide.';
+        ? 'Before using any pesticide, check the diagnosis with an agricultural technician or a plant clinic. Use only FPA-registered products and follow the label dose and the waiting time before harvest.'
+        : 'Chemical options are hidden until the diagnosis is confirmed. Get a second opinion (see "Still not sure" below) before using any pesticide.';
     }
     el.sourcesBox.hidden = false;
     el.sources.replaceChildren(...r.sources.map((s) => {

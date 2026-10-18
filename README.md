@@ -19,8 +19,9 @@ scientific names of the plant and the cause.
   hides chemical treatments until the diagnosis is confident.
 
 This is a student research prototype. Results can be wrong. Confirm any diagnosis with an agricultural
-technician (for example your Municipal Agriculture Office) before spraying or removing plants, and use only
-pesticides registered with the Fertilizer and Pesticide Authority, following the label.
+technician or a plant clinic (for example the UPLB Pest Clinic, which accepts samples by courier, or a DA
+Regional Crop Protection Center) before spraying or removing plants, and use only pesticides registered with
+the Fertilizer and Pesticide Authority, following the label.
 
 ## How it works
 

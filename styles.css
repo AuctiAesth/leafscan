@@ -367,6 +367,8 @@ p { margin: .4rem 0; }
 .help-card { margin-top: 18px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
 .help-card h3 { margin-top: 0; }
 .help-card p { margin: 0; font-size: .9rem; }
+.help-list { margin: 6px 0 10px; padding-left: 1.2em; display: grid; gap: 6px; font-size: .9rem; }
+.help-card a { color: var(--accent-strong); }
 .disclaimer { margin-top: 14px; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; }
 
 .confirm { padding: 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); margin-bottom: 8px; }
