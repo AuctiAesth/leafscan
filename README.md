@@ -9,7 +9,14 @@ scientific names of the plant and the cause.
 - Works on phones, tablets and computers in any modern browser; install it with *Add to Home Screen*.
 - Runs entirely on your device: photos are never uploaded.
 - Works offline after the first visit (about 32 MB download).
-- When a photo is uncertain, it asks yes/no questions about visible symptoms to narrow down the result.
+- Move and pinch the photo under a fixed square to choose the leaf. LeafScan checks the photo once when it
+  opens, then again only when you tap **Check this leaf** (or, if you turn it on, when you let go). The page
+  never scrolls by itself, and each new check shows how the confidence changed.
+- Confidence is shown as a word, a percentage and how often results that sure were right on 3,100 farm
+  photos (about 9, 7 or 4 in 10).
+- Warns about blurry or dark photos, and can combine up to 3 leaves of the same plant into one result.
+- When a photo is uncertain, it asks yes/no questions about visible symptoms to narrow down the result, and
+  hides chemical treatments until the diagnosis is confident.
 
 This is a student research prototype. Results can be wrong. Confirm any diagnosis with an agricultural
 technician (for example your Municipal Agriculture Office) before spraying or removing plants, and use only

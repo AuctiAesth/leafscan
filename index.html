@@ -17,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <img src="icons/icon.svg" alt="" width="32" height="32">
+      <img src="icons/icon.svg" alt="" width="30" height="30">
       <div>
         <h1>LeafScan</h1>
         <p class="tagline">Plant disease detection by image recognition</p>
@@ -26,36 +26,56 @@
     <button id="installBtn" class="btn btn-ghost" hidden>Install app</button>
   </header>
 
-  <main>
-    <section class="card" id="scanCard" aria-labelledby="scanTitle">
-      <h2 id="scanTitle" class="visually-hidden">Scan a leaf</h2>
+  <main class="layout">
+    <!-- Left (or top on phones): the photo, the square the model checks, and the framing tools -->
+    <section class="card scan" id="scanCard" aria-labelledby="scanTitle">
+      <h2 id="scanTitle" class="visually-hidden">Photo of the leaf</h2>
 
-      <div id="dropzone" class="dropzone" tabindex="0" aria-label="Drop a leaf photo here">
+      <div id="stage" class="stage" tabindex="0"
+           aria-label="Leaf photo. Drag or pinch to move the leaf into the square, or use the arrow and plus or minus keys.">
         <div id="emptyState" class="empty">
-          <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true"><path d="M52 10C30 10 14 22 14 40c0 4 1 8 3 11 2-9 9-18 20-24-8 6-14 14-16 25 3 2 7 3 11 3 18 0 22-23 20-45z" fill="currentColor" opacity=".9"/></svg>
-          <p class="empty-title">Take or upload a photo of one leaf</p>
+          <svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true"><path d="M52 10C30 10 14 22 14 40c0 4 1 8 3 11 2-9 9-18 20-24-8 6-14 14-16 25 3 2 7 3 11 3 18 0 22-23 20-45z" fill="currentColor" opacity=".9"/></svg>
+          <p class="empty-title">Photograph one leaf</p>
           <p class="empty-sub" id="emptySub">The photo never leaves your device.</p>
         </div>
-        <div id="previewWrap" class="preview" hidden>
-          <canvas id="previewCanvas"></canvas>
-          <div id="cropBox" class="cropbox" aria-hidden="true"></div>
-        </div>
+        <canvas id="previewCanvas" class="photo" hidden></canvas>
+        <div id="frame" class="frame" hidden aria-hidden="true"><span class="frame-label">LeafScan checks this square</span></div>
       </div>
 
-      <div id="zoomRow" class="zoom" hidden>
-        <label for="zoom">Zoom on the leaf</label>
-        <input id="zoom" type="range" min="1" max="3" step="0.1" value="1">
-        <output id="zoomOut" for="zoom">1.0×</output>
+      <div id="tools" class="tools" hidden>
+        <button id="zoomOutBtn" class="tool" type="button" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 11h14v2H5z" fill="currentColor"/></svg>
+        </button>
+        <output id="zoomLevel" class="zoom-level" aria-live="off">1.0×</output>
+        <button id="zoomInBtn" class="tool" type="button" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+        </button>
+        <button id="resetBtn" class="tool" type="button" aria-label="Reset zoom and position" title="Reset">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z" fill="currentColor"/></svg>
+        </button>
+        <span class="tools-gap"></span>
+        <button id="retakeBtn" class="tool" type="button" aria-label="Take a new photo" title="Take a new photo">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
+        </button>
+        <button id="pickBtn" class="tool" type="button" aria-label="Choose another photo from the gallery" title="Choose from gallery">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <p id="hint" class="hint" hidden>Drag or pinch so one leaf fills the square.</p>
+
+      <div id="addBanner" class="add-banner" hidden>
+        <p id="addText"><b>Add another leaf</b> from the same plant. Results from all leaves are combined.</p>
+        <button id="addCancel" class="btn btn-ghost small" type="button">Cancel</button>
       </div>
 
-      <div class="actions">
+      <div id="actions" class="actions">
         <button id="cameraBtn" class="btn btn-primary" disabled>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
           Take photo
         </button>
         <button id="uploadBtn" class="btn btn-secondary" disabled>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3 7 8h3v6h4V8h3l-5-5zM4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3h-2v3H6v-3H4z" fill="currentColor"/></svg>
-          Upload image
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
+          From gallery
         </button>
         <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
         <input id="fileInput" type="file" accept="image/*" hidden>
@@ -65,20 +85,47 @@
       <div id="progress" class="progress" aria-hidden="true"><span></span></div>
     </section>
 
-    <section class="card result" id="resultCard" hidden aria-live="polite" aria-labelledby="resultName">
-      <div class="result-head">
-        <span id="resultChip" class="chip"></span>
-        <span id="resultTime" class="muted small"></span>
+    <!-- Result summary: sits right under the photo on phones, at the top of the right column on computers.
+         It only changes when a check finishes, never while the photo is being moved. -->
+    <section class="card summary" id="summaryCard" hidden aria-labelledby="resultName">
+      <div id="summaryBody" class="summary-body" role="status" aria-live="polite" aria-atomic="true">
+        <div class="sum-head">
+          <span id="resultChip" class="chip"></span>
+          <span id="resultBasis" class="muted small"></span>
+        </div>
+        <p id="resultPlant" class="result-plant"></p>
+        <h2 id="resultName" class="result-name"></h2>
+        <p id="resultSci" class="result-sci"></p>
+        <div class="conf-row">
+          <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence" id="resultMeter"><span id="resultBar"></span></div>
+          <span id="resultConf" class="conf-num"></span>
+        </div>
+        <p class="conf-line"><span id="confWord"></span><span id="resultDelta" class="delta"></span></p>
       </div>
-      <p id="resultPlant" class="result-plant"></p>
-      <h2 id="resultName" class="result-name"></h2>
-      <p id="resultSci" class="result-sci"></p>
-      <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" id="resultMeter">
-        <span id="resultBar"></span>
-      </div>
-      <p id="resultConf" class="small"></p>
-      <p id="resultWarning" class="warning" hidden></p>
 
+      <div class="message-slot">
+        <div id="resultMessage" class="message"></div>
+        <div id="staleBar" class="stale-bar" hidden>
+          <p><b>The square moved.</b><span class="visually-hidden"> This result is for the old square.</span></p>
+          <button id="checkBtn" class="btn btn-primary" type="button">Check this leaf</button>
+        </div>
+      </div>
+
+      <ul id="leafStrip" class="leaf-strip" hidden aria-label="Leaves in this result"></ul>
+
+      <div class="sum-actions">
+        <button id="addLeafBtn" class="btn btn-secondary small" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+          Add another leaf
+        </button>
+        <label class="switch">
+          <input type="checkbox" id="autoCheck">
+          <span>Check again by itself when I let go</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card details" id="detailsCard" hidden>
       <div id="confirmBox" class="confirm" hidden>
         <h3>Help narrow it down</h3>
         <p class="small muted">Look closely at the leaf and answer what you can. Your answers re-rank the possibilities.</p>
@@ -89,20 +136,27 @@
       <div id="resultDetails">
         <h3 id="symptomsTitle">What it looks like</h3>
         <p id="resultSymptoms"></p>
-        <h3 id="lookTitle">Check the leaf for</h3>
+        <h3 id="lookTitle">Does your leaf show these signs?</h3>
         <ul id="resultLook" class="plainlist"></ul>
         <h3 id="manageTitle">What you can do</h3>
         <ul id="resultManage" class="checklist"></ul>
-        <div id="sourcesBox">
-          <h3>Expert sources</h3>
-          <ul id="resultSources" class="sources"></ul>
-          <p id="resultNote" class="small muted"></p>
-        </div>
+        <p id="chemNote" class="chem-note" hidden></p>
       </div>
 
       <h3>Other possibilities</h3>
       <ol id="resultOthers" class="others"></ol>
-      <p class="disclaimer">This is a research prototype. Before you spray or remove plants, confirm the diagnosis with an agricultural technician (for example your Municipal Agriculture Office), and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+
+      <div id="sourcesBox">
+        <h3>Expert sources</h3>
+        <ul id="resultSources" class="sources"></ul>
+        <p id="resultNote" class="small muted"></p>
+      </div>
+
+      <div class="help-card">
+        <h3>Still not sure, or many plants are sick?</h3>
+        <p>Bring several fresh sick leaves (and the stem if it is affected) in a paper or plastic bag, together with this screen, to your Municipal Agriculture Office. They can send samples to a plant clinic such as the Bureau of Plant Industry or UPLB.</p>
+      </div>
+      <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician, and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
     </section>
 
     <section class="card" id="historyCard" hidden>
@@ -113,31 +167,31 @@
       <ul id="historyList" class="history"></ul>
     </section>
 
-    <section class="card tips">
-      <h2>Tips for an accurate result</h2>
+    <section class="card tips" id="tipsCard">
+      <h2>How to take a good photo</h2>
       <ul>
-        <li><b>One leaf</b>, filling most of the square.</li>
-        <li><b>Plain background</b> such as paper, a table or your palm.</li>
-        <li><b>Good, even light</b>: shade or indoors near a window, no harsh shadows.</li>
-        <li><b>Sharp focus</b>: tap the leaf on your screen before taking the photo.</li>
-        <li>Show the <b>side with the spots</b> or discoloration.</li>
+        <li><b>One leaf</b> that fills most of the square, showing the side with the spots.</li>
+        <li><b>Hold the phone flat</b> above the leaf and keep still. Tilted or blurry photos are often wrong.</li>
+        <li><b>Even light</b>: shade or near a window, no harsh shadows or dark corners.</li>
+        <li><b>Plain background</b> if you can, such as paper, a table or your palm.</li>
+        <li>If the result is not sure, <b>add 2 or 3 leaves</b> from the same plant. More leaves give a more reliable answer.</li>
       </ul>
     </section>
 
-    <section class="card">
+    <section class="card" id="cropsCard">
       <h2>Supported plants</h2>
       <ul id="cropList" class="crops"></ul>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. Runs fully on your device with ONNX Runtime Web. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF.</p>
+    <p>Research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. Runs fully on your device with ONNX Runtime Web; photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF.</p>
     <p id="offlineNote" class="muted small"></p>
   </footer>
 
   <dialog id="cameraDialog" class="camera-dialog">
     <video id="cameraVideo" playsinline autoplay muted></video>
-    <div class="camera-guide" aria-hidden="true"></div>
+    <div class="camera-guide" aria-hidden="true"><span>Fill the square with one leaf</span></div>
     <div class="camera-actions">
       <button id="cameraCancel" class="btn btn-ghost-light">Cancel</button>
       <button id="cameraShutter" class="shutter" aria-label="Capture photo"></button>
