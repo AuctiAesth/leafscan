@@ -1,12 +1,13 @@
 // Offline support: cache the app, the ONNX Runtime files and the model on first visit.
 // Large files that never change (model, runtime) are served from the cache first;
 // the small app files are fetched fresh when online so updates arrive, with the cache as fallback.
-const CACHE = 'leafscan-v5';
+const CACHE = 'leafscan-v6';
 const FILES = [
   './',
   'index.html',
   'styles.css',
   'app.js',
+  'worker.js',
   'manifest.webmanifest',
   'data/kb.json',
   'model/labels.json',

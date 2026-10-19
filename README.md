@@ -14,9 +14,15 @@ scientific names of the plant and the cause.
   never scrolls by itself, and each new check shows how the confidence changed.
 - Confidence is shown as a word, a percentage and how often results that sure were right on 3,100 farm
   photos (about 9, 7 or 4 in 10).
+- If LeafScan guessed the wrong plant, choose the right one: it then ranks only that plant's problems. On the
+  same farm photos this raised accuracy from 72% to 88%.
+- Says "Not recognized" instead of guessing when the photo may not be a leaf or a plant it knows.
 - Warns about blurry or dark photos, and can combine up to 3 leaves of the same plant into one result.
-- When a photo is uncertain, it asks yes/no questions about visible symptoms to narrow down the result, and
+- When a photo is uncertain, it asks up to 4 yes/no questions about visible symptoms, one at a time, and
   hides chemical treatments until the diagnosis is confident.
+- "Show to a technician" puts the leaf photos, results and answers on one screen to share or copy.
+- "Was this right?" answers are kept on the device, so you can see how often LeafScan was right for you.
+- The model runs in a background worker, so moving the photo stays smooth on slow phones.
 
 This is a student research prototype. Results can be wrong. Confirm any diagnosis with an agricultural
 technician or a plant clinic (for example the UPLB Pest Clinic, which accepts samples by courier, or a DA

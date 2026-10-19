@@ -91,7 +91,10 @@
       <div id="summaryBody" class="summary-body" role="status" aria-live="polite" aria-atomic="true">
         <div class="sum-head">
           <span id="resultChip" class="chip"></span>
-          <span id="resultBasis" class="muted small"></span>
+          <label class="plant-pick" title="Wrong plant? Choose the right one.">
+            <span class="visually-hidden">Plant</span>
+            <select id="plantSelect"></select>
+          </label>
         </div>
         <p id="resultPlant" class="result-plant"></p>
         <h2 id="resultName" class="result-name"></h2>
@@ -100,7 +103,7 @@
           <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence" id="resultMeter"><span id="resultBar"></span></div>
           <span id="resultConf" class="conf-num"></span>
         </div>
-        <p class="conf-line"><span id="confWord"></span><span id="resultDelta" class="delta"></span></p>
+        <p class="conf-line"><span id="confWord"></span><span id="resultBasis"></span><span id="resultDelta" class="delta"></span></p>
       </div>
 
       <div class="message-slot">
@@ -118,6 +121,10 @@
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
           Add another leaf
         </button>
+        <button id="techBtn" class="btn btn-ghost small" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z" fill="currentColor"/></svg>
+          Show to a technician
+        </button>
         <label class="switch">
           <input type="checkbox" id="autoCheck">
           <span>Check again by itself when I let go</span>
@@ -127,10 +134,25 @@
 
     <section class="card details" id="detailsCard" hidden>
       <div id="confirmBox" class="confirm" hidden>
-        <h3>Help narrow it down</h3>
-        <p class="small muted">Look closely at the leaf and answer what you can. Your answers re-rank the possibilities.</p>
-        <ol id="confirmList" class="confirm-list"></ol>
-        <p id="confirmResult" class="small" hidden></p>
+        <div class="row-between">
+          <h3>Help narrow it down</h3>
+          <span id="confirmCount" class="small muted"></span>
+        </div>
+        <div id="confirmStep">
+          <p class="small muted">Look closely at the leaf (or other leaves on the plant).</p>
+          <p id="confirmQ" class="confirm-q"></p>
+          <p id="confirmWhy" class="small muted"></p>
+          <div class="answer-row" role="group" aria-labelledby="confirmQ">
+            <button type="button" class="btn btn-secondary" data-a="yes">Yes <span lang="fil">(Oo)</span></button>
+            <button type="button" class="btn btn-secondary" data-a="no">No <span lang="fil">(Hindi)</span></button>
+            <button type="button" class="btn btn-ghost" data-a="skip">Not sure <span lang="fil">(Hindi ko alam)</span></button>
+          </div>
+          <button id="confirmBack" class="link-btn" type="button" hidden>Back to the last question</button>
+        </div>
+        <div id="confirmDone" hidden>
+          <p id="confirmResult"></p>
+          <button id="confirmRestart" class="link-btn" type="button">Answer the questions again</button>
+        </div>
       </div>
 
       <div id="resultDetails">
@@ -143,8 +165,20 @@
         <p id="chemNote" class="chem-note" hidden></p>
       </div>
 
-      <h3>Other possibilities</h3>
+      <h3 id="othersTitle">Other possibilities</h3>
       <ol id="resultOthers" class="others"></ol>
+
+      <div class="feedback" id="feedbackBox">
+        <h3>Was this result right?</h3>
+        <p class="small muted">Answer once a technician or plant clinic has checked it, or the plant shows clearer signs. You can also answer later under Recent scans. Saved only on this device.</p>
+        <div class="seg" id="feedbackSeg" role="group" aria-label="Was this result right?">
+          <button type="button" data-a="right" aria-pressed="false">Right <span lang="fil">(Tama)</span></button>
+          <button type="button" data-a="wrong" aria-pressed="false">Wrong <span lang="fil">(Mali)</span></button>
+          <button type="button" data-a="unknown" aria-pressed="false">Not sure yet</button>
+        </div>
+        <button id="unlistedBtn" class="link-btn" type="button">My plant's problem is not in LeafScan's list</button>
+        <p id="feedbackNote" class="small" role="status"></p>
+      </div>
 
       <div id="sourcesBox">
         <h3>Expert sources</h3>
@@ -171,6 +205,7 @@
         <h2>Recent scans</h2>
         <button id="clearHistory" class="btn btn-ghost small">Clear</button>
       </div>
+      <p id="tally" class="small muted" hidden></p>
       <ul id="historyList" class="history"></ul>
     </section>
 
@@ -195,6 +230,20 @@
     <p>Research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. Runs fully on your device with ONNX Runtime Web; photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF.</p>
     <p id="offlineNote" class="muted small"></p>
   </footer>
+
+  <dialog id="techDialog" class="tech-dialog" aria-labelledby="techTitle">
+    <div class="tech-sheet">
+      <div class="row-between">
+        <h2 id="techTitle">LeafScan result</h2>
+        <button id="techClose" class="btn btn-ghost small" type="button">Close</button>
+      </div>
+      <div id="techBody"></div>
+      <div class="tech-actions">
+        <button id="techShare" class="btn btn-primary" type="button">Share or copy</button>
+      </div>
+      <p id="techNote" class="small muted" role="status"></p>
+    </div>
+  </dialog>
 
   <dialog id="cameraDialog" class="camera-dialog">
     <video id="cameraVideo" playsinline autoplay muted></video>

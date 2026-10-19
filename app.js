@@ -10,7 +10,8 @@
  *
  * The photo is checked once when it is loaded. Moving or zooming it never re-checks on a timer: the result
  * is marked as out of date until the user taps "Check this leaf" (or, if they turn it on, until they let go).
- * Results are updated in place and the page never scrolls by itself.
+ * Results are updated in place and the page never scrolls by itself. The model runs in a Web Worker
+ * (worker.js), with the page itself as a fallback.
  */
 (() => {
   'use strict';
@@ -25,6 +26,13 @@
   // Out of 10 answers in each band, how many were right on 3,100 held-out field photos
   // (92.6%, 69.4% and 39.4%; training/calibrate_app.py -> results/app_calibration.json).
   const RIGHT_IN_10 = { confident: 9, moderate: 7, unsure: 4 };
+  // The same, after the user chooses the plant and only that plant's problems are ranked (94.4%, 56.1%, 37.6%).
+  // Choosing the plant raised overall accuracy on these photos from 72% to 88%.
+  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 4 };
+  // Below this top probability the guess was right only 23% of the time, and even the plant only 37%.
+  const NOT_RECOGNIZED = 0.20;
+  const OTHER_PLANT = 'other';
+  const MAX_QUESTIONS = 4;
   // Photo checks on the 224x224 crop, set from the same field photos: blurred copies score below 20 while
   // fewer than 1% of real field photos do; crops darker than 50 (of 255) lose accuracy.
   const BLURRY = 20;
@@ -34,7 +42,9 @@
   const AUTO_DELAY = 350;   // ms after the user lets go, when automatic checking is on
   const HISTORY_KEY = 'leafscan.history.v1';
   const AUTO_KEY = 'leafscan.autocheck.v1';
+  const FEEDBACK_KEY = 'leafscan.feedback.v1';
   const HISTORY_MAX = 8;
+  const FEEDBACK_MAX = 500;
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -45,21 +55,28 @@
     actions: $('actions'), cameraBtn: $('cameraBtn'), uploadBtn: $('uploadBtn'),
     cameraInput: $('cameraInput'), fileInput: $('fileInput'), status: $('status'), progress: $('progress'),
     summaryCard: $('summaryCard'), summaryBody: $('summaryBody'), chip: $('resultChip'), basis: $('resultBasis'),
+    plantSelect: $('plantSelect'),
     plant: $('resultPlant'), name: $('resultName'), sci: $('resultSci'), meter: $('resultMeter'), bar: $('resultBar'),
     conf: $('resultConf'), confWord: $('confWord'), delta: $('resultDelta'), message: $('resultMessage'),
     staleBar: $('staleBar'), checkBtn: $('checkBtn'), leafStrip: $('leafStrip'), addLeafBtn: $('addLeafBtn'),
-    autoCheck: $('autoCheck'),
+    techBtn: $('techBtn'), autoCheck: $('autoCheck'),
     detailsCard: $('detailsCard'), details: $('resultDetails'), symptomsTitle: $('symptomsTitle'), symptoms: $('resultSymptoms'),
     lookTitle: $('lookTitle'), look: $('resultLook'), manageTitle: $('manageTitle'), manage: $('resultManage'),
     chemNote: $('chemNote'), sourcesBox: $('sourcesBox'), sources: $('resultSources'), note: $('resultNote'),
-    others: $('resultOthers'), confirmBox: $('confirmBox'), confirmList: $('confirmList'), confirmResult: $('confirmResult'),
-    historyCard: $('historyCard'), historyList: $('historyList'), clearHistory: $('clearHistory'),
+    othersTitle: $('othersTitle'), others: $('resultOthers'),
+    confirmBox: $('confirmBox'), confirmCount: $('confirmCount'), confirmStep: $('confirmStep'), confirmQ: $('confirmQ'),
+    confirmWhy: $('confirmWhy'), confirmBack: $('confirmBack'), confirmDone: $('confirmDone'),
+    confirmResult: $('confirmResult'), confirmRestart: $('confirmRestart'),
+    feedbackSeg: $('feedbackSeg'), unlistedBtn: $('unlistedBtn'), feedbackNote: $('feedbackNote'),
+    techDialog: $('techDialog'), techBody: $('techBody'), techShare: $('techShare'), techClose: $('techClose'),
+    techNote: $('techNote'),
+    historyCard: $('historyCard'), historyList: $('historyList'), clearHistory: $('clearHistory'), tally: $('tally'),
     cropList: $('cropList'), installBtn: $('installBtn'), offlineNote: $('offlineNote'),
     dialog: $('cameraDialog'), video: $('cameraVideo'), shutter: $('cameraShutter'),
     cameraCancel: $('cameraCancel'), cameraSwitch: $('cameraSwitch'),
   };
 
-  let session = null;
+  let runner = null;        // runs the model: { run(Float32Array) -> Promise<{ probs, ms }>, where }
   let labels = [];
   let kb = { hosts: {}, conditions: [] };
   let byId = new Map();     // knowledge-base id -> condition record
@@ -71,6 +88,9 @@
   let plantId = 0;          // groups the history entry of one plant
   let adding = false;       // the next photo is another leaf of the same plant
   let shown = null;         // the last result shown for this plant, for the "changed by" line
+  let plantLock = null;     // plant chosen by the user (kept for later photos), or OTHER_PLANT
+  let current = null;       // the result on screen: { ranked, top, d, outcome, band }
+  let lastMs = null;        // time of the last model run
   let busy = false;
   let again = false;
   let autoTimer = 0;
@@ -116,17 +136,18 @@
       byId = new Map(kb.conditions.map((c) => [c.id, c]));
       entries = labels.map(mapLabel);
       renderCrops();
+      renderPlantSelect();
       renderHistory();
 
       setStatus('Downloading the AI model (first time only)…');
       const bytes = await fetchWithProgress(MODEL_URL, setProgress);
       setStatus('Starting the AI model…');
-      session = await ort.InferenceSession.create(bytes, {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
-      });
-      // Warm-up so the first real scan is fast
-      await session.run({ image: new ort.Tensor('float32', new Float32Array(3 * SIZE * SIZE), [1, 3, SIZE, SIZE]) });
+      try {
+        runner = await workerRunner(bytes);
+      } catch (err) {
+        console.warn('Model worker unavailable, running the model on the page instead', err);
+        runner = await pageRunner(bytes);
+      }
 
       el.progress.classList.add('done');
       el.cameraBtn.disabled = false;
@@ -137,6 +158,62 @@
       console.error(err);
       setStatus('Could not load the AI model. Check your connection and reload the page.');
     }
+  }
+
+  // The model runs in a Web Worker (worker.js) so a slow check never blocks dragging and pinching.
+  function workerRunner(bytes) {
+    return new Promise((resolve, reject) => {
+      let worker;
+      try { worker = new Worker('worker.js'); } catch (err) { reject(err); return; }
+      const pending = new Map();
+      let seq = 0;
+      const fail = (err) => { clearTimeout(timer); worker.terminate(); reject(err); };
+      const timer = setTimeout(() => fail(new Error('the model worker did not start in time')), 90000);
+      worker.onerror = (e) => { e.preventDefault(); fail(new Error(e.message || 'model worker error')); };
+      worker.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.type === 'ready') {
+          clearTimeout(timer);
+          worker.onerror = (ev) => console.error('Model worker error', ev.message);
+          resolve({
+            where: 'worker',
+            run(data) {
+              return new Promise((res, rej) => {
+                const id = ++seq;
+                pending.set(id, { res, rej });
+                worker.postMessage({ type: 'run', id, data }, [data.buffer]);
+              });
+            },
+          });
+        } else if (msg.type === 'failed') {
+          fail(new Error(msg.message));
+        } else {
+          const p = pending.get(msg.id);
+          pending.delete(msg.id);
+          if (!p) return;
+          if (msg.type === 'result') p.res({ probs: msg.probs, ms: msg.ms });
+          else p.rej(new Error(msg.message));
+        }
+      };
+      worker.postMessage({ type: 'load', bytes }); // copied, so the page can still use the bytes as a fallback
+    });
+  }
+
+  async function pageRunner(bytes) {
+    const session = await ort.InferenceSession.create(bytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    const tensor = (data) => new ort.Tensor('float32', data, [1, 3, SIZE, SIZE]);
+    await session.run({ image: tensor(new Float32Array(3 * SIZE * SIZE)) }); // warm-up
+    return {
+      where: 'page',
+      async run(data) {
+        const t0 = performance.now();
+        const out = await session.run({ image: tensor(data) });
+        return { probs: Float32Array.from(out.probabilities.data), ms: performance.now() - t0 };
+      },
+    };
   }
 
   // ---------- Image input ----------
@@ -188,7 +265,7 @@
     el.stage.classList.add('has-photo');
     el.stage.setAttribute('aria-label',
       'Leaf photo. Drag or pinch to move the leaf into the square, or use the arrow and plus or minus keys. Press Enter to check.');
-    setStatus(session ? '' : 'The photo is ready. Waiting for the AI model to finish loading…');
+    setStatus(runner ? '' : 'The photo is ready. Waiting for the AI model to finish loading…');
     scheduleRender();
     updateStale();
     analyze();
@@ -394,7 +471,7 @@
 
   el.stage.addEventListener('keydown', (e) => {
     if (!source) {
-      if ((e.key === 'Enter' || e.key === ' ') && session) { e.preventDefault(); el.fileInput.click(); }
+      if ((e.key === 'Enter' || e.key === ' ') && runner) { e.preventDefault(); el.fileInput.click(); }
       return;
     }
     const step = baseSide() / view.zoom * 0.1;
@@ -455,7 +532,7 @@
     return out;
   }
 
-  function toTensor(canvas) {
+  function toCHW(canvas) {
     const { data } = canvas.getContext('2d').getImageData(0, 0, SIZE, SIZE);
     const plane = SIZE * SIZE;
     const chw = new Float32Array(3 * plane);
@@ -464,7 +541,7 @@
       chw[p + plane] = data[i + 1] / 255;
       chw[p + 2 * plane] = data[i + 2] / 255;
     }
-    return new ort.Tensor('float32', chw, [1, 3, SIZE, SIZE]);
+    return chw;
   }
 
   // Sharpness = variance of the 4-neighbour Laplacian of the luma; brightness = mean luma (0..255).
@@ -498,7 +575,7 @@
 
   async function analyze() {
     clearTimeout(autoTimer);
-    if (!session || !source) return;
+    if (!runner || !source) return;
     if (busy) { again = true; return; }
     busy = true;
     again = false;
@@ -507,19 +584,16 @@
     try {
       const canvas = cropTo224(v);
       const quality = checkQuality(canvas);
-      const t0 = performance.now();
-      const output = await session.run({ image: toTensor(canvas) });
-      const ms = performance.now() - t0;
+      const { probs, ms } = await runner.run(toCHW(canvas));
       if (!source || source.id !== v.id) return; // a new photo replaced this one meanwhile
-      const probs = Float32Array.from(output.probabilities.data);
+      lastMs = ms;
       const leaf = leaves.find((l) => l.id === v.id);
-      const thumb = thumbnail(canvas, 80);
-      if (leaf) Object.assign(leaf, { probs, thumb, quality });
-      else leaves.push({ id: v.id, probs, thumb, quality });
+      const shots = { thumb: thumbnail(canvas, 88), crop: canvas.toDataURL('image/jpeg', 0.85) };
+      if (leaf) Object.assign(leaf, { probs, quality }, shots);
+      else leaves.push({ id: v.id, probs, quality, ...shots });
       checked = v;
-      const ranked = rank(combine());
-      showResult(ranked, ms, quality);
-      saveHistory(thumbnail(canvas, 88), ranked[0]);
+      showResult();
+      saveHistory();
     } catch (err) {
       console.error(err);
       setStatus('Something went wrong while checking. Please try another photo.');
@@ -541,6 +615,19 @@
   function rank(probs) {
     return Array.from(probs, (p, i) => ({ p, i })).sort((a, b) => b.p - a.p);
   }
+
+  // All classes ranked, and the ranking shown: when the user chose the plant, only that plant's classes,
+  // renormalized so they add up to 100%.
+  function ranking() {
+    const all = rank(combine());
+    if (!plantLock || plantLock === OTHER_PLANT) return { ranked: all, all };
+    const mine = all.filter(({ i }) => entries[i].host === plantLock);
+    const total = mine.reduce((s, x) => s + x.p, 0) || 1;
+    return { ranked: mine.map(({ p, i }) => ({ p: p / total, i })), all };
+  }
+
+  const hostHasProblems = (host) => entries.some((e) => e.host === host && !e.healthy);
+  const plantName = (host) => kb.hosts[host]?.en || host;
 
   function thumbnail(canvas, side) {
     const t = document.createElement('canvas');
@@ -640,35 +727,64 @@
   };
   const CONF_WORD = { confident: 'High confidence', moderate: 'Medium confidence', unsure: 'Low confidence' };
 
-  function showResult(ranked, ms, quality) {
+  // Outcomes: confident | moderate | unsure (by top probability), unknown (very low, plant not chosen),
+  // uncovered (the user says the plant is not in LeafScan's list), healthy-only (the chosen plant has no
+  // disease classes, only healthy leaves).
+  function showResult() {
+    if (!leaves.length) return;
+    const { ranked, all } = ranking();
     const top = ranked[0];
     const d = describe(top.i);
-    const band = bandOf(top.p);
     const kind = kindOf(d);
-    const unsure = band === 'unsure';
+    const band = bandOf(top.p);
+    let outcome = band;
+    if (plantLock === OTHER_PLANT) outcome = 'uncovered';
+    else if (plantLock && !hostHasProblems(plantLock)) outcome = 'healthy-only';
+    else if (!plantLock && top.p < NOT_RECOGNIZED) outcome = 'unknown';
+    const special = outcome === 'uncovered' || outcome === 'healthy-only';
+    const doubtful = special || outcome === 'unsure' || outcome === 'unknown';
+    current = { ranked, all, top, d, band, outcome };
 
     el.summaryCard.hidden = false;
     el.detailsCard.hidden = false;
-    el.chip.className = `chip ${unsure ? 'unsure' : kind}`;
-    el.chip.textContent = unsure ? 'Not sure' : CHIP[band][kind];
-    el.basis.textContent = leaves.length > 1
-      ? `${leaves.length} leaves combined`
-      : (ms != null ? `Checked in ${Math.round(ms)} ms` : '');
+    renderPlantSelect();
+    el.chip.className = `chip ${doubtful ? 'unsure' : kind}`;
+    el.chip.textContent = {
+      uncovered: 'Not covered', 'healthy-only': 'Not covered', unknown: 'Not recognized', unsure: 'Not sure',
+    }[outcome] || CHIP[band][kind];
 
     const plantLabel = d.plantFil ? `${d.plant} · ${d.plantFil}` : d.plant;
-    el.plant.textContent = unsure ? `Best guess: ${plantLabel}` : plantLabel;
-    el.name.textContent = unsure ? `${d.name}?` : d.name;
-    el.sci.replaceChildren(...sciLine(d));
-    el.meter.className = `meter ${unsure ? 'unsure' : kind}`;
-    el.bar.style.transform = `scaleX(${top.p.toFixed(3)})`;
-    el.meter.setAttribute('aria-valuenow', String(Math.round(top.p * 100)));
-    el.conf.textContent = pct0(top.p);
-    el.confWord.textContent = CONF_WORD[band];
+    if (outcome === 'uncovered') {
+      el.plant.textContent = 'Your plant is not in LeafScan\'s list';
+      el.name.textContent = 'LeafScan cannot check this plant';
+      el.sci.replaceChildren();
+    } else if (outcome === 'healthy-only') {
+      el.plant.textContent = `${plantLabel} (your choice)`;
+      el.name.textContent = `${d.plant} diseases are not covered yet`;
+      el.sci.replaceChildren(...sciLine({ ...d, record: null }));
+    } else if (outcome === 'unknown') {
+      el.plant.textContent = `Closest match: ${plantLabel}`;
+      el.name.textContent = 'Not recognized';
+      el.sci.replaceChildren(`Closest guess: ${d.healthy ? 'a healthy leaf' : d.name.toLowerCase()}`);
+    } else {
+      el.plant.textContent = `${outcome === 'unsure' ? 'Best guess: ' : ''}${plantLabel}${plantLock ? ' (your choice)' : ''}`;
+      el.name.textContent = outcome === 'unsure' ? `${d.name}?` : d.name;
+      el.sci.replaceChildren(...sciLine(d));
+    }
+
+    el.meter.className = `meter ${doubtful ? 'unsure' : kind}`;
+    el.bar.style.transform = `scaleX(${special ? 0 : top.p.toFixed(3)})`;
+    el.meter.setAttribute('aria-valuenow', String(special ? 0 : Math.round(top.p * 100)));
+    el.conf.textContent = special ? '–' : pct0(top.p);
+    el.confWord.textContent = special ? 'No result' : (outcome === 'unknown' ? 'Very low confidence' : CONF_WORD[band]);
+    const basis = [leaves.length > 1 ? `${leaves.length} leaves` : null,
+      plantLock && !special ? `among ${d.plant.toLowerCase()} problems` : null].filter(Boolean).join(', ');
+    el.basis.textContent = basis ? ` · ${basis}` : '';
 
     // What changed since the last check of this plant, so the effect of moving the square is visible.
     el.delta.className = 'delta';
     el.delta.textContent = '';
-    if (shown) {
+    if (shown && !special) {
       if (shown.i !== top.i) {
         el.delta.classList.add('changed');
         el.delta.textContent = `was ${shortName(describe(shown.i))} ${pct0(shown.p)}`;
@@ -678,45 +794,98 @@
         if (diff) el.delta.classList.add(diff > 0 ? 'up' : 'down');
       }
     }
-    shown = { i: top.i, p: top.p };
+    if (!special) shown = { i: top.i, p: top.p };
 
-    renderMessage(band, d, ranked, quality);
-    el.details.hidden = unsure;
-    el.sourcesBox.hidden = unsure;
-    if (!unsure) renderDetails(d, band);
-    renderConfirm(ranked, top.p);
-    renderOthers(ranked);
+    renderMessage(outcome, d, ranked, all);
+    const detailed = outcome === 'confident' || outcome === 'moderate';
+    el.details.hidden = !detailed;
+    el.sourcesBox.hidden = !detailed;
+    if (detailed) renderDetails(d, band);
+    renderQuiz(ranked, outcome);
+    renderOthers(ranked, outcome);
     renderLeaves();
+    renderFeedbackState();
 
-    el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES;
-    el.addLeafBtn.classList.toggle('suggest', band !== 'confident');
+    el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES || special;
+    el.addLeafBtn.classList.toggle('suggest', outcome !== 'confident');
   }
 
-  function renderMessage(band, d, ranked, quality) {
+  function renderMessage(outcome, d, ranked, all) {
     const parts = [];
-    if (quality && (quality.blurry || quality.dark)) {
-      parts.push(make('p', 'quality', quality.blurry
+    const q = leaves.find((l) => source && l.id === source.id)?.quality;
+    if (q && (q.blurry || q.dark)) {
+      parts.push(make('p', 'quality', q.blurry
         ? 'The photo looks blurry. Hold the phone still, tap the leaf on the screen to focus, and retake it.'
         : 'The photo looks too dark. Retake it in shade or near a window, without dark shadows.'));
     }
+    // The chosen plant does not match what LeafScan clearly sees.
+    const seen = all[0];
+    if (plantLock && plantLock !== OTHER_PLANT && seen.p >= CONFIDENT && entries[seen.i].host !== plantLock) {
+      parts.push(make('p', 'quality',
+        `To LeafScan this looks more like ${plantName(entries[seen.i].host).toLowerCase()} (${pct0(seen.p)}). Is the plant choice right?`));
+    }
+    const rate = plantLock ? RIGHT_IN_10_PLANT : RIGHT_IN_10;
+    const among = plantLock ? ` among ${d.plant.toLowerCase()} problems` : '';
     let text;
-    if (band === 'confident') {
+    if (outcome === 'uncovered') {
+      text = 'LeafScan knows only the plants under "Supported plants". For this plant, ask a plant clinic or an agriculture teacher (see "Still not sure" below).';
+    } else if (outcome === 'healthy-only') {
+      text = `LeafScan has learned only healthy ${d.plant.toLowerCase()} leaves, so it cannot check them for diseases. Ask a plant clinic or an agriculture teacher (see "Still not sure" below).`;
+    } else if (outcome === 'unknown') {
+      text = 'This may not be a leaf, or it may be a plant or problem LeafScan does not know. When LeafScan is this unsure, its guess was right only about 2 in 10 times. Move the square onto one leaf, or choose the plant above if LeafScan knows it.';
+    } else if (outcome === 'confident') {
       text = d.healthy
         ? 'No disease seen in this photo. Early signs can be missed, so check the plant again in 3 to 5 days.'
-        : `On farm photos, results this sure were right about ${RIGHT_IN_10.confident} in 10 times. Compare the signs below before you act.`;
-    } else if (band === 'moderate') {
+        : `On farm photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`;
+    } else if (outcome === 'moderate') {
       const alt = ranked[1] ? describe(ranked[1].i) : null;
-      text = `Results this sure were right about ${RIGHT_IN_10.moderate} in 10 times.` +
+      text = `Results this sure${among} were right about ${rate.moderate} in 10 times.` +
         (alt ? ` It could also be ${shortName(alt, d)}.` : '') +
-        ' Answer the questions below, or add another leaf.';
+        (plantLock ? ' Answer the questions below, or add another leaf.'
+          : ' Answer the questions below, add another leaf, or choose the plant above if it is wrong.');
     } else {
-      text = `LeafScan is not sure: guesses like this were right only about ${RIGHT_IN_10.unsure} in 10 times. ` +
-        'This does not mean the plant is healthy. Move the square onto one leaf, retake it in even light, or add another leaf.';
+      text = `LeafScan is not sure: guesses like this were right only about ${rate.unsure} in 10 times. ` +
+        'This does not mean the plant is healthy. Move the square onto one leaf, retake it in even light, or add another leaf.' +
+        (plantLock ? '' : ' If the plant is wrong, choose the right one above.');
     }
     parts.push(make('p', null, text));
-    el.message.className = `message ${band}`;
+    el.message.className = `message ${outcome === 'confident' || outcome === 'moderate' ? outcome : 'unsure'}`;
     el.message.replaceChildren(...parts);
   }
+
+  // The plant picker: "Wrong plant?" until the user chooses one; the choice is kept for later photos.
+  function renderPlantSelect() {
+    const sel = el.plantSelect;
+    if (!sel.options.length) {
+      const hosts = [...new Set(entries.map((e) => e.host).filter(Boolean))]
+        .sort((a, b) => plantName(a).localeCompare(plantName(b)));
+      const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
+      const placeholder = opt('', 'Wrong plant?');
+      placeholder.hidden = true;
+      const group = document.createElement('optgroup');
+      group.label = 'Plants LeafScan knows';
+      group.append(...hosts.map((h) => {
+        const info = kb.hosts[h] || {};
+        return opt(h, `${plantName(h)}${info.fil ? ` (${info.fil})` : ''}${hostHasProblems(h) ? '' : ': healthy leaves only'}`);
+      }));
+      sel.append(placeholder, opt('auto', 'Let LeafScan guess the plant'), group, opt(OTHER_PLANT, 'My plant is not in this list'));
+    }
+    sel.value = plantLock || '';
+    sel.querySelector('option[value="auto"]').hidden = !plantLock;
+    sel.classList.toggle('locked', !!plantLock);
+  }
+
+  el.plantSelect.addEventListener('change', () => {
+    const v = el.plantSelect.value;
+    plantLock = v === 'auto' || v === '' ? null : v;
+    clearTimeout(autoTimer);
+    if (leaves.length) {
+      showResult();
+      saveHistory();
+    } else {
+      renderPlantSelect();
+    }
+  });
 
   // Chemical control lines from the knowledge base (fungicides, sprays, copper, ...).
   const CHEMICAL = /\b(fungicides?|insecticides?|miticides?|acaricides?|bactericides?|nematicides?|pesticides?|copper|sprays?|spraying)\b/i;
@@ -774,8 +943,13 @@
     el.note.textContent = notes.join(' ');
   }
 
-  function renderOthers(ranked) {
-    el.others.replaceChildren(...ranked.slice(1, 4).map(({ p, i }) => {
+  function renderOthers(ranked, outcome) {
+    const special = outcome === 'uncovered' || outcome === 'healthy-only';
+    el.othersTitle.hidden = el.others.hidden = special;
+    if (special) return;
+    el.othersTitle.textContent = outcome === 'unknown' ? 'Closest matches' : 'Other possibilities';
+    const list = outcome === 'unknown' ? ranked.slice(0, 3) : ranked.slice(1, 4);
+    el.others.replaceChildren(...list.map(({ p, i }) => {
       const o = describe(i);
       const li = document.createElement('li');
       const bar = make('div', 'o-bar');
@@ -807,8 +981,8 @@
         rm.setAttribute('aria-label', `Remove leaf ${n + 1}`);
         rm.addEventListener('click', () => {
           leaves = leaves.filter((x) => x !== l);
-          const cur = leaves.find((x) => x.id === source.id);
-          showResult(rank(combine()), null, cur && cur.quality);
+          showResult();
+          saveHistory();
           updateStale();
         });
         li.append(rm);
@@ -817,74 +991,100 @@
     }));
   }
 
-  // When the photo is not conclusive, ask about visible signs listed in the expert records of the top
-  // candidates and re-rank them: each "yes" doubles a candidate's weight, each "no" halves it.
-  let confirmState = null;
+  // ---------- Symptom questions ----------
+  // When the photo is not conclusive, ask one question at a time about visible signs listed in the expert
+  // records of the top candidates, and re-rank them: each "yes" doubles a candidate's weight, each "no"
+  // halves it, "not sure" changes nothing. At most MAX_QUESTIONS, alternating between the leading candidates,
+  // stopping early once one candidate clearly leads.
+  let quiz = null; // { pool, queue: [{ key, q, c }], pos, answers: Map, done }
 
-  function renderConfirm(ranked, topP) {
+  function renderQuiz(ranked, outcome) {
     // The pool keeps every likely candidate, including "healthy" (which has no questions), so that
     // answering "no" to all disease signs can still lead to a healthy result.
     const pool = ranked.slice(0, 3).filter(({ p }) => p >= 0.08).map(({ p, i }) => ({ p, i, d: describe(i) }));
-    const cands = pool.filter((c) => c.d.record && c.d.record.look_for && c.d.record.look_for.length);
-    if (topP >= CONFIDENT || pool.length < 2 || cands.length < 1) {
+    const cands = pool.filter((c) => c.d.record?.look_for?.length);
+    if ((outcome !== 'moderate' && outcome !== 'unsure') || pool.length < 2 || !cands.length) {
       el.confirmBox.hidden = true;
-      confirmState = null;
+      quiz = null;
       return;
     }
-    confirmState = { pool, cands, answers: {} };
-    el.confirmBox.hidden = false;
-    el.confirmResult.hidden = true;
-    const items = [];
-    for (const c of cands) {
-      c.d.record.look_for.forEach((q, n) => {
-        const key = `${c.i}:${n}`;
-        const li = document.createElement('li');
-        const label = make('span', 'confirm-q', `${q} `);
-        label.append(make('small', null, `(sign of ${c.d.name.toLowerCase()})`));
-        const seg = make('div', 'seg');
-        seg.setAttribute('role', 'group');
-        seg.setAttribute('aria-label', q);
-        for (const [val, text] of [['yes', 'Yes'], ['no', 'No'], ['skip', 'Not sure']]) {
-          const b = make('button', null, text);
-          b.type = 'button';
-          b.setAttribute('aria-pressed', 'false');
-          b.addEventListener('click', () => {
-            confirmState.answers[key] = val;
-            seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-            applyConfirm();
-          });
-          seg.append(b);
-        }
-        li.append(label, seg);
-        items.push(li);
-      });
+    const queue = [];
+    for (let n = 0; queue.length < MAX_QUESTIONS && cands.some((c) => c.d.record.look_for[n]); n++) {
+      for (const c of cands) {
+        const q = c.d.record.look_for[n];
+        if (q && queue.length < MAX_QUESTIONS) queue.push({ key: `${c.i}:${n}`, q, c });
+      }
     }
-    el.confirmList.replaceChildren(...items);
+    quiz = { pool, queue, pos: 0, answers: new Map(), done: false };
+    el.confirmBox.hidden = false;
+    showQuestion();
   }
 
-  function applyConfirm() {
-    if (!confirmState) return;
-    const scored = confirmState.pool.map((c) => {
+  function showQuestion() {
+    const { queue, pos, done } = quiz;
+    el.confirmStep.hidden = done;
+    el.confirmDone.hidden = !done;
+    el.confirmCount.textContent = done ? '' : `Question ${pos + 1} of ${queue.length}`;
+    if (done) return;
+    const item = queue[pos];
+    el.confirmQ.textContent = item.q;
+    el.confirmWhy.textContent = `A sign of ${item.c.d.name.toLowerCase()}${item.c.d.host !== current.d.host ? ` on ${item.c.d.plant.toLowerCase()}` : ''}.`;
+    el.confirmBack.hidden = pos === 0;
+  }
+
+  function quizScores() {
+    const scored = quiz.pool.map((c) => {
       let w = c.p;
-      (c.d.record?.look_for || []).forEach((_, n) => {
-        const a = confirmState.answers[`${c.i}:${n}`];
+      for (const item of quiz.queue) {
+        if (item.c.i !== c.i) continue;
+        const a = quiz.answers.get(item.key);
         if (a === 'yes') w *= 2;
         if (a === 'no') w *= 0.5;
-      });
+      }
       return { ...c, w };
     });
     const total = scored.reduce((sum, c) => sum + c.w, 0);
-    scored.sort((a, b) => b.w - a.w);
+    return scored.map((c) => ({ ...c, share: c.w / total })).sort((a, b) => b.w - a.w);
+  }
+
+  function answerQuestion(a) {
+    if (!quiz || quiz.done) return;
+    quiz.answers.set(quiz.queue[quiz.pos].key, a);
+    quiz.pos++;
+    const scored = quizScores();
+    const answered = [...quiz.answers.values()].filter((x) => x !== 'skip').length;
+    quiz.done = quiz.pos >= quiz.queue.length || (answered >= 2 && scored[0].share >= 0.85);
+    applyQuiz(scored);
+    showQuestion();
+  }
+
+  function applyQuiz(scored) {
+    const answered = [...quiz.answers.values()].some((x) => x !== 'skip');
     const best = scored[0];
-    el.confirmResult.hidden = false;
-    el.confirmResult.textContent = `Best match after your answers: ${best.d.plant}: ${best.d.name} ` +
-      `(${pct(best.w / total)} among these candidates). This combines the photo with your answers; confirm with a technician.`;
+    if (!answered) {
+      el.confirmResult.textContent = 'No yes or no answers, so the result from the photo stays the same.';
+      return;
+    }
+    const what = best.d.healthy ? `a healthy ${best.d.plant.toLowerCase()} leaf` : shortName(best.d, current.d);
+    el.confirmResult.textContent = `After your answers, the best match is ${what} (${pct0(best.share)} among these possibilities). ` +
+      'This combines the photo with your answers; confirm with a technician or plant clinic.';
     el.name.textContent = best.d.name;
     el.sci.replaceChildren(...sciLine(best.d));
     renderDetails(best.d, 'moderate');
     el.details.hidden = false;
     el.sourcesBox.hidden = !best.d.record;
   }
+
+  el.confirmStep.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => answerQuestion(b.dataset.a)));
+  el.confirmBack.addEventListener('click', () => {
+    if (!quiz || quiz.pos === 0) return;
+    quiz.pos--;
+    quiz.answers.delete(quiz.queue[quiz.pos].key);
+    quiz.done = false;
+    applyQuiz(quizScores());
+    showQuestion();
+  });
+  el.confirmRestart.addEventListener('click', () => showResult());
 
   function fillList(ul, items) {
     ul.replaceChildren(...items.map((t) => make('li', null, t)));
@@ -909,47 +1109,245 @@
     }));
   }
 
-  // ---------- History (per-device convenience only) ----------
+  // ---------- History and feedback (stored only on this device) ----------
+
+  const FB_LABEL = {
+    right: 'marked right', wrong: 'marked wrong', unknown: 'not sure yet', unlisted: 'problem not in LeafScan\'s list',
+  };
 
   function readHistory() {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
   }
 
-  function saveHistory(img, top) {
+  function readFeedback() {
+    try { return JSON.parse(localStorage.getItem(FEEDBACK_KEY)) || []; } catch { return []; }
+  }
+
+  function saveHistory() {
+    if (!current) return;
     try {
       const items = readHistory();
-      const entry = { t: Date.now(), id: labels[top.i].id, p: top.p, sid: plantId, n: leaves.length, img };
-      // Re-checks and extra leaves of the same plant replace its entry instead of stacking duplicates.
-      if (items[0] && items[0].sid === plantId) items.shift();
-      items.unshift(entry);
+      // Re-checks, extra leaves and plant changes replace the plant's entry instead of stacking duplicates.
+      const prev = items[0] && items[0].sid === plantId ? items.shift() : null;
+      const leaf = leaves.find((l) => source && l.id === source.id) || leaves[leaves.length - 1];
+      const id = labels[current.top.i].id;
+      items.unshift({
+        t: Date.now(), sid: plantId, id, p: current.top.p, band: current.outcome, lock: plantLock,
+        n: leaves.length, img: leaf.thumb, fb: prev && prev.id === id ? prev.fb : undefined,
+      });
       localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_MAX)));
     } catch { /* storage unavailable: history is optional */ }
     renderHistory();
+  }
+
+  function historyName(h) {
+    if (h.band === 'uncovered') return 'Plant not in LeafScan\'s list';
+    const idx = labels.findIndex((l) => l.id === h.id);
+    const d = idx >= 0 ? describe(idx) : { plant: h.id.split(/___|\//)[0], name: h.id.split(/___|\//)[1] || '' };
+    if (h.band === 'healthy-only') return `${d.plant}: diseases not covered`;
+    if (h.band === 'unknown') return `Not recognized (closest: ${d.plant})`;
+    const unsure = h.band ? h.band === 'unsure' : h.p < UNSURE;
+    return unsure ? `Not sure (maybe ${d.plant}: ${d.name})` : `${d.plant}: ${d.name}`;
   }
 
   function renderHistory() {
     const items = readHistory();
     el.historyCard.hidden = items.length === 0;
     el.historyList.replaceChildren(...items.map((h) => {
-      const idx = labels.findIndex((l) => l.id === h.id);
-      const d = idx >= 0 ? describe(idx) : { plant: h.id.split(/___|\//)[0], name: h.id.split(/___|\//)[1] || '' };
+      const name = historyName(h);
       const li = document.createElement('li');
       const img = document.createElement('img');
       img.src = h.img; img.alt = ''; img.width = 44; img.height = 44;
       const text = make('div', 'h-text');
+      const special = h.band === 'uncovered' || h.band === 'healthy-only';
       text.append(
-        make('div', 'h-name', h.p < UNSURE ? `Not sure (maybe ${d.plant}: ${d.name})` : `${d.plant}: ${d.name}`),
-        make('div', 'h-meta', [pct(h.p), h.n > 1 ? `${h.n} leaves` : null,
-          new Date(h.t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })].filter(Boolean).join(' · ')),
+        make('div', 'h-name', name),
+        make('div', 'h-meta', [special ? null : pct(h.p), h.n > 1 ? `${h.n} leaves` : null,
+          new Date(h.t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), FB_LABEL[h.fb]]
+          .filter(Boolean).join(' · ')),
       );
       li.append(img, text);
+      // Feedback can be given later, once the real cause is known.
+      if (!special && (!h.fb || h.fb === 'unknown')) {
+        const box = make('div', 'h-fb');
+        for (const [a, sym, label] of [['right', '✓', 'Mark right'], ['wrong', '✗', 'Mark wrong']]) {
+          const b = make('button', a, sym);
+          b.type = 'button';
+          b.title = label;
+          b.setAttribute('aria-label', `${label}: ${name}`);
+          b.addEventListener('click', () => setFeedback(h.sid, a));
+          box.append(b);
+        }
+        li.append(box);
+      }
       return li;
     }));
+    renderTally();
   }
 
-  el.clearHistory.addEventListener('click', () => {
-    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+  // "Your checks so far": how often results in each confidence band turned out right for this user.
+  function renderTally() {
+    const list = readFeedback();
+    const parts = [['confident', 'high confidence'], ['moderate', 'medium'], ['unsure', 'not sure'], ['unknown', 'not recognized']]
+      .map(([band, label]) => {
+        const xs = list.filter((f) => f.band === band && (f.a === 'right' || f.a === 'wrong'));
+        return xs.length ? `${label} ${xs.filter((f) => f.a === 'right').length} of ${xs.length} right` : null;
+      }).filter(Boolean);
+    const unlisted = list.filter((f) => f.a === 'unlisted').length;
+    if (unlisted) parts.push(`${unlisted} not in LeafScan's list`);
+    el.tally.hidden = !parts.length;
+    el.tally.textContent = parts.length ? `Your checks so far: ${parts.join(' · ')}.` : '';
+  }
+
+  function setFeedback(sid, a) {
+    try {
+      const items = readHistory();
+      const h = items.find((x) => x.sid === sid);
+      if (h) {
+        h.fb = a;
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+      }
+      const info = h || (current && sid === plantId
+        ? { id: labels[current.top.i].id, p: current.top.p, band: current.outcome, lock: plantLock } : {});
+      const list = readFeedback().filter((f) => f.sid !== sid);
+      list.unshift({ sid, t: Date.now(), a, id: info.id, p: info.p, band: info.band || bandOf(info.p || 0), lock: info.lock || null });
+      localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list.slice(0, FEEDBACK_MAX)));
+    } catch {
+      el.feedbackNote.textContent = 'Could not save on this device.';
+      return;
+    }
     renderHistory();
+    renderFeedbackState();
+  }
+
+  function renderFeedbackState() {
+    const f = readFeedback().find((x) => x.sid === plantId);
+    el.feedbackSeg.querySelectorAll('[data-a]').forEach((b) => b.setAttribute('aria-pressed', String(!!f && f.a === b.dataset.a)));
+    el.feedbackNote.textContent = !f ? '' : {
+      right: 'Saved as right. Thank you.',
+      wrong: 'Saved as wrong. Please get a second opinion before treating the plant (see "Still not sure" below).',
+      unknown: 'Saved. You can answer later under Recent scans.',
+      unlisted: 'Saved. A plant clinic or an agriculture teacher can identify it (see "Still not sure" below).',
+    }[f.a];
+  }
+
+  el.feedbackSeg.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => {
+    if (current) setFeedback(plantId, b.dataset.a);
+  }));
+  el.unlistedBtn.addEventListener('click', () => { if (current) setFeedback(plantId, 'unlisted'); });
+
+  el.clearHistory.addEventListener('click', () => {
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+      localStorage.removeItem(FEEDBACK_KEY);
+    } catch { /* ignore */ }
+    renderHistory();
+    renderFeedbackState();
+  });
+
+  // ---------- Summary to show or send to a technician, teacher or plant clinic ----------
+
+  let techFiles = [];
+
+  function techContent() {
+    const c = current;
+    const d = c.d;
+    const special = c.outcome === 'uncovered' || c.outcome === 'healthy-only';
+    const facts = [];
+    const add = (label, value) => facts.push([label, value]);
+    const hostSci = d.hostSci ? ` (${d.hostSci}${d.hostRank === 'genus' ? ' spp.' : ''})` : '';
+    add('Plant', c.outcome === 'uncovered' ? 'Not in LeafScan\'s list (chosen by the user)'
+      : `${d.plant}${hostSci}, ${plantLock ? 'chosen by the user' : 'guessed by LeafScan'}`);
+    if (special) {
+      add('LeafScan result', 'None: LeafScan does not cover diseases of this plant');
+    } else {
+      const name = c.outcome === 'unknown' ? `Not recognized (closest guess: ${d.healthy ? 'healthy' : d.name})`
+        : (d.healthy ? 'Healthy' : d.name);
+      const word = c.outcome === 'unknown' ? 'very low confidence' : CONF_WORD[c.band].toLowerCase();
+      add('LeafScan result', `${name}${d.record?.agent ? ` (${d.record.agent})` : ''}, ${pct0(c.top.p)}, ${word}`);
+      const others = c.ranked.slice(1, 4).filter(({ p }) => p >= 0.01).map(({ p, i }) => {
+        const o = describe(i);
+        return `${o.plant}: ${o.healthy ? 'healthy' : o.name.toLowerCase()} ${pct(p)}`;
+      });
+      if (others.length) add('Other possibilities', others);
+    }
+    if (quiz && quiz.answers.size) {
+      const said = { yes: 'Yes', no: 'No', skip: 'Not sure' };
+      add('Answers to symptom questions', quiz.queue.filter((it) => quiz.answers.has(it.key))
+        .map((it) => `${it.q} ${said[quiz.answers.get(it.key)]}`));
+    }
+    add('Photo check', leaves.map((l, n) => `Leaf ${n + 1}: ${l.quality.blurry ? 'blurry' : l.quality.dark ? 'too dark' : 'sharp, good light'}`));
+    add('How it was checked', `${leaves.length} leaf photo${leaves.length > 1 ? 's' : ''} checked on the user's device` +
+      `${lastMs != null ? ` in ${Math.round(lastMs)} ms` : ''} by LeafScan, a student prototype (MobileNetV3 model, ` +
+      'about 72% right on farm photos overall).');
+    const fb = readFeedback().find((x) => x.sid === plantId);
+    if (fb) add('User\'s feedback', FB_LABEL[fb.a]);
+    const date = new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    const header = `LeafScan result, ${date}. This is a student research prototype and can be wrong; please confirm the diagnosis.`;
+    const text = [header, ...facts.map(([label, value]) => `${label}: ${Array.isArray(value) ? value.join('; ') : value}`)].join('\n');
+    return { header, facts, text };
+  }
+
+  async function openTech() {
+    if (!current) return;
+    const { header, facts } = techContent();
+    const pics = make('div', 'tech-leaves');
+    leaves.forEach((l, n) => {
+      const fig = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = l.crop;
+      img.alt = `Leaf ${n + 1}, the square LeafScan checked`;
+      fig.append(img, make('figcaption', null, `Leaf ${n + 1}`));
+      pics.append(fig);
+    });
+    const dl = make('dl', 'tech-facts');
+    for (const [label, value] of facts) {
+      const row = document.createElement('div');
+      const dd = document.createElement('dd');
+      if (Array.isArray(value)) {
+        const ul = document.createElement('ul');
+        ul.append(...value.map((v) => make('li', null, v)));
+        dd.append(ul);
+      } else {
+        dd.textContent = value;
+      }
+      row.append(make('dt', null, label), dd);
+      dl.append(row);
+    }
+    el.techBody.replaceChildren(make('p', 'small muted', header), pics, dl);
+    el.techNote.textContent = '';
+    el.techDialog.showModal();
+    // Prepare the leaf photos now, so sharing starts right away when the button is tapped.
+    techFiles = [];
+    try {
+      techFiles = await Promise.all(leaves.map(async (l, n) =>
+        new File([await (await fetch(l.crop)).blob()], `leafscan-leaf-${n + 1}.jpg`, { type: 'image/jpeg' })));
+    } catch { techFiles = []; }
+  }
+
+  el.techBtn.addEventListener('click', openTech);
+  el.techClose.addEventListener('click', () => el.techDialog.close());
+  el.techDialog.addEventListener('click', (e) => { if (e.target === el.techDialog) el.techDialog.close(); });
+  el.techShare.addEventListener('click', async () => {
+    if (!current) return;
+    const { text } = techContent();
+    if (navigator.share) {
+      const data = { title: 'LeafScan result', text };
+      if (techFiles.length && navigator.canShare && navigator.canShare({ files: techFiles })) data.files = techFiles;
+      try {
+        await navigator.share(data);
+        el.techNote.textContent = 'Shared.';
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      el.techNote.textContent = 'Copied. Paste it into a message to your technician, teacher or plant clinic, and attach the leaf photos.';
+    } catch {
+      el.techNote.textContent = 'Sharing is not available here. Show this screen instead.';
+    }
   });
 
   // ---------- Adding leaves and starting over ----------
