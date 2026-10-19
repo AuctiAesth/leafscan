@@ -8,15 +8,18 @@ scientific names of the plant and the cause.
 
 - Works on phones, tablets and computers in any modern browser; install it with *Add to Home Screen*.
 - Runs entirely on your device: photos are never uploaded.
-- Works offline after the first visit (about 32 MB download).
+- Works offline after the first visit (about 8 MB download). The model downloads in small checked parts, so a
+  dropped connection continues where it stopped, and app updates never download the model again.
 - Move and pinch the photo under a fixed square to choose the leaf. LeafScan checks the photo once when it
   opens, then again only when you tap **Check this leaf** (or, if you turn it on, when you let go). The page
   never scrolls by itself, and each new check shows how the confidence changed.
-- Confidence is shown as a word, a percentage and how often results that sure were right on 3,100 farm
-  photos (about 9, 7 or 4 in 10).
+- Confidence is shown as a word, a percentage and how often results that sure were right on 3,100 test
+  field photos from public datasets (about 9, 7 or 4 in 10; not yet Philippine photos).
 - If LeafScan guessed the wrong plant, choose the right one: it then ranks only that plant's problems. On the
-  same farm photos this raised accuracy from 72% to 88%.
+  same test photos this raised accuracy from 72% to 88%.
 - Says "Not recognized" instead of guessing when the photo may not be a leaf or a plant it knows.
+- Study mode (for the research team) logs each photo with the study's photo-log fields and exports a ZIP with
+  the photos and `photo_log.csv`; nothing leaves the phone until you export it.
 - Warns about blurry or dark photos, and can combine up to 3 leaves of the same plant into one result.
 - When a photo is uncertain, it asks up to 4 yes/no questions about visible symptoms, one at a time, and
   hides chemical treatments until the diagnosis is confident.
@@ -31,7 +34,8 @@ the Fertilizer and Pesticide Authority, following the label.
 
 ## How it works
 
-A MobileNetV3-Large image recognition model (17.9 MB, ONNX) runs in the browser with ONNX Runtime Web. Each
+A MobileNetV3-Large image recognition model runs in the browser with ONNX Runtime Web: the study model is 17.9 MB;
+the app ships the same model with 8-bit weights (4.9 MB, accuracy within 0.1 point on 3,100 test photos). Each
 result links to a record in the knowledge base (`data/kb.json`) with symptoms, signs to check, management
 steps and the expert sources they were summarized from.
 

@@ -16,27 +16,29 @@
 (() => {
   'use strict';
 
-  const MODEL_URL = 'model/plant_disease_mnv3.onnx';
   const LABELS_URL = 'model/labels.json';
   const KB_URL = 'data/kb.json';
   const SIZE = 224;
   const RESIZE = 256;
   const CONFIDENT = 0.70;   // at or above: show result normally
   const UNSURE = 0.45;      // below: say we are not sure
-  // Out of 10 answers in each band, how many were right on 3,100 held-out field photos
-  // (92.6%, 69.4% and 39.4%; training/calibrate_app.py -> results/app_calibration.json).
+  // Cut-offs are chosen on the 2,209 validation field photos; every rate is reported on the 3,100 test field
+  // photos (public datasets, not Philippine farms), neither used in training. training/calibrate_app.py ->
+  // results/app_calibration.json, for the app's model v2-int8 (the paper's v1-study figures are in results/v1-study).
+  // Out of 10 answers in each band, how many were right: 92.3% [90.9-93.6], 70.2% [66.6-73.5], 40.1% [37.0-43.3].
   const RIGHT_IN_10 = { confident: 9, moderate: 7, unsure: 4 };
-  // The same, after the user chooses the plant and only that plant's problems are ranked (94.4%, 56.1%, 37.6%).
-  // Choosing the plant raised overall accuracy on these photos from 72% to 88%.
-  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 4 };
-  // Below this top probability the guess was right only 23% of the time, and even the plant only 37%.
-  const NOT_RECOGNIZED = 0.20;
+  // The same when the user chooses the plant and only that plant's problems are ranked: 94.1%, 58.7%, 29.6%.
+  // Choosing the plant raises overall accuracy on these photos from 71.9% to 87.7%.
+  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 3 };
+  // Below this top probability the guess was right only 28.9% of the time (about 3 in 10), and the plant 41.1%.
+  const NOT_RECOGNIZED = 0.25;
   const OTHER_PLANT = 'other';
   const MAX_QUESTIONS = 4;
-  // Photo checks on the 224x224 crop, set from the same field photos: blurred copies score below 20 while
-  // fewer than 1% of real field photos do; crops darker than 50 (of 255) lose accuracy.
-  const BLURRY = 20;
-  const DARK = 50;
+  // Photo checks on the 224x224 crop. Blur: at least 95% of artificially blurred crops score below 18, and
+  // only 2% of real ones. Darkness barely hurts this model, so it warns only on very dark crops, where a
+  // person could not check the spots either.
+  const BLURRY = 18;
+  const DARK = 30;
   const ZOOM_STEP = 1.25;
   const MAX_LEAVES = 3;
   const AUTO_DELAY = 350;   // ms after the user lets go, when automatic checking is on
@@ -71,7 +73,10 @@
     techDialog: $('techDialog'), techBody: $('techBody'), techShare: $('techShare'), techClose: $('techClose'),
     techNote: $('techNote'),
     historyCard: $('historyCard'), historyList: $('historyList'), clearHistory: $('clearHistory'), tally: $('tally'),
-    cropList: $('cropList'), installBtn: $('installBtn'), offlineNote: $('offlineNote'),
+    cropList: $('cropList'), installBtn: $('installBtn'), offlineNote: $('offlineNote'), retryBtn: $('retryBtn'),
+    studyBox: $('studyBox'), studyForm: $('studyForm'), studySave: $('studySave'), studyNote: $('studyNote'),
+    studyLog: $('studyLog'), studyCount: $('studyCount'), studyExport: $('studyExport'), studyList: $('studyList'),
+    studyExportNote: $('studyExportNote'), studyClear: $('studyClear'), studyToggle: $('studyToggle'),
     brandBtn: $('brandBtn'), navrow: $('navrow'), tabs: [...document.querySelectorAll('#navrow [data-view]')],
     intro: $('intro'), introFacts: $('introFacts'), historyCount: $('historyCount'), historyEmpty: $('historyEmpty'),
     plantFilter: $('plantFilter'), plantsLede: $('plantsLede'), plantsEmpty: $('plantsEmpty'),
@@ -94,6 +99,7 @@
   let plantLock = null;     // plant chosen by the user (kept for later photos), or OTHER_PLANT
   let current = null;       // the result on screen: { ranked, top, d, outcome, band }
   let lastMs = null;        // time of the last model run
+  let modelVersion = '';    // from model/model.json, recorded with study-log entries
   let busy = false;
   let again = false;
   let autoTimer = 0;
@@ -108,25 +114,110 @@
     el.progress.querySelector('span').style.width = `${Math.min(100, Math.round(fraction * 100))}%`;
   }
 
-  async function fetchWithProgress(url, onProgress) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    const total = Number(res.headers.get('Content-Length')) || 0;
-    if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
-    const reader = res.body.getReader();
-    const chunks = [];
-    let received = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      onProgress(received / total);
+  // The model is downloaded in 2 MB parts (training/split_model.py). Each part is checked and stored as it
+  // arrives in a cache named after the model version, which app updates never delete: a dropped connection
+  // costs at most one part, and updating the app costs no model download at all. model.json gives the exact
+  // size, so the progress bar is true (the server's gzip Content-Length is not).
+  const MODEL_INFO_URL = 'model/model.json';
+  const MODEL_CACHE_PREFIX = 'leafscan-model-';
+
+  async function sha256hex(buf) {
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function partIsIntact(buf, part) {
+    if (buf.length !== part.bytes) return false;
+    return !(self.crypto && crypto.subtle) || (await sha256hex(buf)) === part.sha256;
+  }
+
+  // One part, retried with a growing pause, so a short drop in the connection does not stop the download.
+  async function fetchPart(url, part, onBytes) {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1500 * attempt));
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+        let buf;
+        if (res.body) {
+          buf = new Uint8Array(part.bytes);
+          let got = 0;
+          const reader = res.body.getReader();
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (got + value.length > buf.length) throw new Error(`${url} is larger than expected`);
+            buf.set(value, got);
+            got += value.length;
+            onBytes(got);
+          }
+          if (got !== part.bytes) throw new Error(`${url} ended early`);
+        } else {
+          buf = new Uint8Array(await res.arrayBuffer());
+        }
+        if (await partIsIntact(buf, part)) return buf;
+        throw new Error(`${url} is damaged`);
+      } catch (err) {
+        lastErr = err;
+      }
     }
-    const bytes = new Uint8Array(received);
+    throw lastErr;
+  }
+
+  // The ONNX Runtime core (about 14 MB) is fetched once by the page and stored in its own cache, then handed
+  // to the worker, so it is never downloaded twice (the browser's HTTP cache may not keep a file this big).
+  async function loadRuntimeBytes(info, onProgress) {
+    const rt = info.runtime;
+    let cache = null;
+    try { if (self.caches) cache = await caches.open(rt.cache); } catch { cache = null; }
+    if (cache) {
+      const hit = await cache.match(rt.file);
+      if (hit) {
+        const buf = new Uint8Array(await hit.arrayBuffer());
+        if (await partIsIntact(buf, rt)) return { wasm: buf, cached: true };
+        await cache.delete(rt.file);
+      }
+    }
+    const wasm = await fetchPart(rt.file, rt, onProgress);
+    if (cache) {
+      try { await cache.put(rt.file, new Response(wasm, { headers: { 'Content-Type': 'application/wasm' } })); } catch { /* storage full */ }
+    }
+    return { wasm, cached: !!cache };
+  }
+
+  async function loadModelBytes(info, onProgress) {
+    const cacheName = MODEL_CACHE_PREFIX + info.version;
+    let cache = null;
+    try { if (self.caches) cache = await caches.open(cacheName); } catch { cache = null; }
+    const bytes = new Uint8Array(info.bytes);
     let offset = 0;
-    for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
-    return bytes;
+    onProgress(0);
+    for (const part of info.parts) {
+      const url = `model/${info.version}/${part.file}`;
+      let buf = null;
+      if (cache) {
+        const hit = await cache.match(url);
+        if (hit) buf = new Uint8Array(await hit.arrayBuffer());
+        if (buf && !(await partIsIntact(buf, part))) { await cache.delete(url); buf = null; }
+      }
+      if (!buf) {
+        buf = await fetchPart(url, part, (n) => onProgress(offset + n));
+        if (cache) {
+          try { await cache.put(url, new Response(buf, { headers: { 'Content-Type': 'application/octet-stream' } })); } catch { /* storage full: carry on without saving */ }
+        }
+      }
+      bytes.set(buf, offset);
+      offset += buf.length;
+      onProgress(offset);
+    }
+    // Parts of older model versions are no longer needed.
+    if (self.caches) {
+      for (const key of await caches.keys()) {
+        if (key.startsWith(MODEL_CACHE_PREFIX) && key !== cacheName) caches.delete(key);
+      }
+    }
+    return { bytes, cached: !!cache };
   }
 
   async function init() {
@@ -142,29 +233,59 @@
       renderPlantSelect();
       renderHistory();
 
-      setStatus('Downloading the AI model (first time only)…');
-      const bytes = await fetchWithProgress(MODEL_URL, setProgress);
+    } catch (err) {
+      console.error(err);
+      setStatus('Could not load LeafScan. Check your connection and reload the page.');
+      return;
+    }
+    await startModel();
+  }
+
+  async function startModel() {
+    el.retryBtn.hidden = true;
+    el.progress.classList.remove('done');
+    let have = 0, total = 0;
+    try {
+      setStatus('Getting the AI model ready…');
+      const info = await (await fetch(MODEL_INFO_URL, { cache: 'no-cache' })).json();
+      total = info.bytes + info.runtime.bytes;
+      modelVersion = info.version;
+      const progress = (done) => {
+        have = done;
+        setProgress(done / total);
+        if (done < total) setStatus(`Downloading the AI model (first time only): ${Math.floor((done / total) * 100)}%`);
+      };
+      let { wasm, cached: wasmCached } = await loadRuntimeBytes(info, progress);
+      let { bytes, cached } = await loadModelBytes(info, (n) => progress(info.runtime.bytes + n));
       setStatus('Starting the AI model…');
       try {
-        runner = await workerRunner(bytes);
+        // Hand both to the worker without copying; if the worker fails, read them again from the cache.
+        runner = await workerRunner(bytes, wasm, cached && wasmCached);
       } catch (err) {
         console.warn('Model worker unavailable, running the model on the page instead', err);
-        runner = await pageRunner(bytes);
+        if (cached && wasmCached) {
+          ({ wasm } = await loadRuntimeBytes(info, () => {}));
+          ({ bytes } = await loadModelBytes(info, () => {}));
+        }
+        runner = await pageRunner(bytes, wasm);
       }
-
       el.progress.classList.add('done');
       el.cameraBtn.disabled = false;
       el.uploadBtn.disabled = false;
       setStatus(source ? '' : 'Ready. Take a photo of one leaf, or choose one from your gallery.');
       if (source) analyze();
+      registerOffline();
     } catch (err) {
       console.error(err);
-      setStatus('Could not load the AI model. Check your connection and reload the page.');
+      setStatus(total
+        ? `The download stopped at ${Math.floor((have / total) * 100)}%. What arrived is saved: connect and tap Try again to continue.`
+        : 'Could not reach LeafScan to download the AI model. Connect and tap Try again.');
+      el.retryBtn.hidden = false;
     }
   }
 
   // The model runs in a Web Worker (worker.js) so a slow check never blocks dragging and pinching.
-  function workerRunner(bytes) {
+  function workerRunner(bytes, wasm, transfer) {
     return new Promise((resolve, reject) => {
       let worker;
       try { worker = new Worker('worker.js'); } catch (err) { reject(err); return; }
@@ -198,11 +319,13 @@
           else p.rej(new Error(msg.message));
         }
       };
-      worker.postMessage({ type: 'load', bytes }); // copied, so the page can still use the bytes as a fallback
+      // Transferred (not copied) when the parts are cached, so the model sits in memory only once.
+      worker.postMessage({ type: 'load', bytes, wasm }, transfer ? [bytes.buffer, wasm.buffer] : []);
     });
   }
 
-  async function pageRunner(bytes) {
+  async function pageRunner(bytes, wasm) {
+    ort.env.wasm.wasmBinary = wasm;
     const session = await ort.InferenceSession.create(bytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
@@ -813,6 +936,7 @@
     renderFeedbackState();
 
     el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES || special;
+    renderStudyBox();
     el.addLeafBtn.classList.toggle('suggest', outcome !== 'confident');
   }
 
@@ -838,11 +962,11 @@
     } else if (outcome === 'healthy-only') {
       text = `LeafScan has learned only healthy ${d.plant.toLowerCase()} leaves, so it cannot check them for diseases. Ask a plant clinic or an agriculture teacher (see "Still not sure" below).`;
     } else if (outcome === 'unknown') {
-      text = 'This may not be a leaf, or it may be a plant or problem LeafScan does not know. When LeafScan is this unsure, its guess was right only about 2 in 10 times. Move the square onto one leaf, or choose the plant above if LeafScan knows it.';
+      text = 'This may not be a leaf, or it may be a plant or problem LeafScan does not know. When LeafScan is this unsure, its guess was right only about 3 in 10 times. Move the square onto one leaf, or choose the plant above if LeafScan knows it.';
     } else if (outcome === 'confident') {
       text = d.healthy
         ? 'No disease seen in this photo. Early signs can be missed, so check the plant again in 3 to 5 days.'
-        : `On farm photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`;
+        : `On test photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`;
     } else if (outcome === 'moderate') {
       const alt = ranked[1] ? describe(ranked[1].i) : null;
       text = `Results this sure${among} were right about ${rate.moderate} in 10 times.` +
@@ -1108,7 +1232,7 @@
     const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
     const problems = [...byHost.values()].reduce((sum, names) => sum + names.length, 0);
     el.emptySub.textContent = `Recognizes ${problems} problems on ${hosts.length} plants. The photo never leaves your device.`;
-    el.introFacts.textContent = `${problems} problems on ${hosts.length} plants · about 7 in 10 right on farm photos · photos never leave your device`;
+    el.introFacts.textContent = `${problems} problems on ${hosts.length} plants · about 7 in 10 right on test field photos · photos never leave your device`;
     el.plantsLede.textContent = `${hosts.length} plants and ${problems} problems, plus healthy leaves of each plant. ` +
       'Scientific names are checked against the GBIF Backbone Taxonomy.';
     el.cropList.replaceChildren(...hosts.map((host) => {
@@ -1156,6 +1280,7 @@
       if (on && focusTab) b.focus();
     }
     window.scrollTo(0, 0); // the user chose another section: start it at the top
+    if (name === 'history') renderStudyLog();
     if (name === 'scan') scheduleRender();
   }
 
@@ -1342,7 +1467,7 @@
     add('Photo check', leaves.map((l, n) => `Leaf ${n + 1}: ${l.quality.blurry ? 'blurry' : l.quality.dark ? 'too dark' : 'sharp, good light'}`));
     add('How it was checked', `${leaves.length} leaf photo${leaves.length > 1 ? 's' : ''} checked on the user's device` +
       `${lastMs != null ? ` in ${Math.round(lastMs)} ms` : ''} by LeafScan, a student prototype (MobileNetV3 model, ` +
-      'about 72% right on farm photos overall).');
+      'about 72% right on 3,100 test field photos from public datasets, not yet Philippine photos).');
     const fb = readFeedback().find((x) => x.sid === plantId);
     if (fb) add('User\'s feedback', FB_LABEL[fb.a]);
     const date = new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
@@ -1412,6 +1537,240 @@
       el.techNote.textContent = 'Sharing is not available here. Show this screen instead.';
     }
   });
+
+  // ---------- Study mode (research team): log each photo with the study's photo_log.csv fields ----------
+  // Entries and photos are kept in IndexedDB on this phone only, until the team exports them as a ZIP with the
+  // photos and a photo_log.csv in the study's columns (field-photos/photo_log.csv).
+
+  const STUDY_KEY = 'leafscan.study.v1';
+  const STUDY_DEFAULTS_KEY = 'leafscan.study.defaults.v1';
+  const STUDY_COLUMNS = ['photo_file', 'date', 'barangay', 'municipality', 'province', 'plant (Filipino / English)',
+    'healthy or sick', 'what you think it is', 'confirmed by (technician / office)', 'confirmed disease',
+    'garden or farm', 'background (natural / plain paper)', 'light (sun / shade / cloudy)', 'phone model', 'notes',
+    'leafscan_result', 'leafscan_confidence', 'leafscan_plant_chosen_by_user', 'leafscan_model'];
+  const REMEMBERED = ['barangay', 'municipality', 'province', 'site', 'background', 'light', 'phone'];
+  let studySavedFor = null; // the photo whose entry has been saved, so it is not saved twice
+
+  const studyOn = () => { try { return localStorage.getItem(STUDY_KEY) === '1'; } catch { return false; } };
+
+  function studyDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('leafscan-study', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('entries', { keyPath: 'id', autoIncrement: true });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function studyTx(mode, fn) {
+    const db = await studyDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('entries', mode);
+      const out = fn(tx.objectStore('entries'));
+      tx.oncomplete = () => { db.close(); resolve(out && 'result' in out ? out.result : undefined); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+
+  const studyAll = () => studyTx('readonly', (s) => s.getAll());
+
+  function photoBlob(max = 1024) {
+    const scale = Math.min(1, max / Math.max(source.w, source.h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(source.w * scale);
+    c.height = Math.round(source.h * scale);
+    c.getContext('2d').drawImage(source.image, 0, 0, c.width, c.height);
+    return new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.88));
+  }
+
+  function renderStudyBox() {
+    const on = studyOn() && !!current && !!source;
+    el.studyBox.hidden = !on;
+    if (!on) return;
+    const f = el.studyForm.elements;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STUDY_DEFAULTS_KEY)) || {}; } catch { saved = {}; }
+    for (const k of REMEMBERED) if (saved[k] && !f[k].value) f[k].value = saved[k];
+    if (studySavedFor !== source.id) {
+      const h = current.outcome === 'uncovered' ? null : kb.hosts[current.d.host];
+      f.plant.value = h ? [h.fil, h.en].filter(Boolean).join(' / ') : '';
+      f.healthy.value = current.d.healthy && current.outcome !== 'unknown' ? 'healthy' : 'sick';
+      f.guess.value = '';
+      f.notes.value = '';
+      el.studySave.disabled = false;
+      el.studySave.textContent = 'Save to study log';
+      el.studyNote.textContent = '';
+    }
+  }
+
+  el.studyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!current || !source || studySavedFor === source.id) return;
+    const f = el.studyForm.elements;
+    const val = (k) => f[k].value.trim();
+    try {
+      localStorage.setItem(STUDY_DEFAULTS_KEY, JSON.stringify(Object.fromEntries(REMEMBERED.map((k) => [k, val(k)]))));
+    } catch { /* optional */ }
+    el.studySave.disabled = true;
+    try {
+      const entries = await studyAll();
+      const plantEn = (val('plant').split('/').pop() || 'leaf').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'leaf';
+      const n = entries.filter((x) => x.photoFile.startsWith(plantEn + '_')).length + 1;
+      const now = new Date();
+      const pad = (x, w = 2) => String(x).padStart(w, '0');
+      const leaf = leaves.find((l) => l.id === source.id);
+      const entry = {
+        created: now.getTime(),
+        photoFile: `${plantEn}_${pad(n, 3)}.jpg`,
+        date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+        barangay: val('barangay'), municipality: val('municipality'), province: val('province'),
+        plant: val('plant'), healthy: f.healthy.value, guess: val('guess'), confirmedBy: '', confirmedDisease: '',
+        site: f.site.value, background: f.background.value, light: f.light.value, phone: val('phone'), notes: val('notes'),
+        result: current.outcome === 'uncovered' ? 'plant not covered' : labels[current.top.i].id,
+        confidence: current.outcome === 'uncovered' ? '' : current.top.p.toFixed(3),
+        plantChosen: plantLock || '', model: modelVersion,
+        thumb: leaf ? leaf.thumb : '', photo: await photoBlob(),
+      };
+      await studyTx('readwrite', (s) => s.add(entry));
+      studySavedFor = source.id;
+      el.studySave.textContent = 'Saved';
+      el.studyNote.textContent = `Saved as ${entry.photoFile} (${entries.length + 1} in the study log).`;
+      renderStudyLog();
+    } catch (err) {
+      console.error(err);
+      el.studySave.disabled = false;
+      el.studyNote.textContent = 'Could not save on this phone (storage may be full).';
+    }
+  });
+
+  async function renderStudyLog() {
+    let entries = [];
+    try { entries = await studyAll(); } catch { entries = []; }
+    el.studyLog.hidden = !studyOn() && entries.length === 0;
+    el.studyCount.textContent = entries.length ? `(${entries.length})` : '';
+    el.studyExport.disabled = entries.length === 0;
+    el.studyList.replaceChildren(...entries.slice().reverse().map((x) => {
+      const li = document.createElement('li');
+      const img = document.createElement('img');
+      img.src = x.thumb || '';
+      img.alt = '';
+      const idx = labels.findIndex((l) => l.id === x.result);
+      const res = idx >= 0 ? describe(idx) : null;
+      li.append(img,
+        make('div', 's-title', `${x.photoFile} · ${x.plant || 'plant not given'}`),
+        make('div', 's-meta', [x.date, [x.barangay, x.municipality].filter(Boolean).join(', '),
+          res ? `LeafScan: ${res.healthy ? 'healthy' : res.name} ${pct0(Number(x.confidence))}` : x.result].filter(Boolean).join(' · ')));
+      const confirm = make('div', 's-confirm');
+      for (const [key, label] of [['confirmedBy', 'Confirmed by'], ['confirmedDisease', 'Confirmed disease']]) {
+        const input = document.createElement('input');
+        input.value = x[key] || '';
+        input.placeholder = label;
+        input.setAttribute('aria-label', `${label} for ${x.photoFile}`);
+        input.addEventListener('change', () => {
+          x[key] = input.value.trim();
+          studyTx('readwrite', (s) => s.put(x)).catch((err) => console.error(err));
+        });
+        confirm.append(input);
+      }
+      li.append(confirm);
+      return li;
+    }));
+  }
+
+  // A minimal ZIP writer (files stored without compression, which JPEG photos don't need).
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  function zipStore(files) {
+    const enc = new TextEncoder();
+    const parts = [], central = [];
+    let offset = 0;
+    const d = new Date();
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const crc = crc32(f.data);
+      const local = new DataView(new ArrayBuffer(30));
+      [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4],
+        [18, f.data.length, 4], [22, f.data.length, 4], [26, name.length, 2], [28, 0, 2]]
+        .forEach(([o, v, s]) => (s === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true)));
+      parts.push(local.buffer, name, f.data);
+      const cen = new DataView(new ArrayBuffer(46));
+      [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4],
+        [20, f.data.length, 4], [24, f.data.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2],
+        [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+        .forEach(([o, v, s]) => (s === 4 ? cen.setUint32(o, v, true) : cen.setUint16(o, v, true)));
+      central.push(cen.buffer, name);
+      offset += 30 + name.length + f.data.length;
+    }
+    const size = central.reduce((s, b) => s + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    [[0, 0x06054b50, 4], [8, files.length, 2], [10, files.length, 2], [12, size, 4], [16, offset, 4]]
+      .forEach(([o, v, s]) => (s === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true)));
+    return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+  }
+
+  const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+
+  el.studyExport.addEventListener('click', async () => {
+    const entries = await studyAll();
+    if (!entries.length) return;
+    el.studyExportNote.textContent = 'Preparing the export…';
+    const rows = entries.map((x) => [x.photoFile, x.date, x.barangay, x.municipality, x.province, x.plant, x.healthy,
+      x.guess, x.confirmedBy, x.confirmedDisease, x.site, x.background, x.light, x.phone, x.notes,
+      x.result, x.confidence, x.plantChosen, x.model]);
+    const csv = [STUDY_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    const files = [{ name: 'photo_log.csv', data: new TextEncoder().encode('﻿' + csv) }];
+    for (const x of entries) files.push({ name: `photos/${x.photoFile}`, data: new Uint8Array(await x.photo.arrayBuffer()) });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const zip = new File([zipStore(files)], `leafscan-study-${stamp}.zip`, { type: 'application/zip' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [zip] })) {
+        await navigator.share({ files: [zip], title: 'LeafScan study log' });
+        el.studyExportNote.textContent = `Shared ${entries.length} photos and photo_log.csv.`;
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') { el.studyExportNote.textContent = ''; return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zip);
+    a.download = zip.name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    el.studyExportNote.textContent = `Saved ${zip.name} (${entries.length} photos and photo_log.csv).`;
+  });
+
+  el.studyClear.addEventListener('click', async () => {
+    if (!window.confirm('Delete every photo and entry in the study log on this phone? Export first if you still need them.')) return;
+    await studyTx('readwrite', (s) => s.clear());
+    el.studyExportNote.textContent = 'The study log on this phone is empty.';
+    renderStudyLog();
+  });
+
+  el.studyToggle.checked = studyOn();
+  el.studyToggle.addEventListener('change', () => {
+    try { localStorage.setItem(STUDY_KEY, el.studyToggle.checked ? '1' : '0'); } catch { /* optional */ }
+    renderStudyBox();
+    renderStudyLog();
+  });
+  renderStudyLog();
 
   // ---------- Adding leaves and starting over ----------
 
@@ -1548,12 +1907,17 @@
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 
-  if ('serviceWorker' in navigator && window.isSecureContext) {
+  // Registered only once the model is ready: the service worker then saves the app and the runtime from the
+  // browser's own cache instead of downloading them a second time while the model is still coming in.
+  function registerOffline() {
+    if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
     navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => {
       el.offlineNote.textContent = 'Saved on this device: LeafScan works without internet after the first visit.' +
         (isIOS && !standalone ? ' On iPhone or iPad, tap Share → Add to Home Screen to install it.' : '');
     }).catch((err) => console.warn('Service worker failed', err));
   }
+
+  el.retryBtn.addEventListener('click', () => startModel());
 
   init();
 })();

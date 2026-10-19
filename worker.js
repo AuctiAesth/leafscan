@@ -12,6 +12,7 @@ self.onmessage = async (e) => {
   const msg = e.data;
   if (msg.type === 'load') {
     try {
+      if (msg.wasm) ort.env.wasm.wasmBinary = msg.wasm; // already downloaded and stored by the page
       session = await ort.InferenceSession.create(msg.bytes, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',

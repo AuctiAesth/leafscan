@@ -125,6 +125,7 @@
 
         <p id="status" class="status" role="status" aria-live="polite">Loading the AI model…</p>
         <div id="progress" class="progress" aria-hidden="true"><span></span></div>
+        <button id="retryBtn" class="btn btn-secondary retry" type="button" hidden>Try again</button>
       </section>
 
       <!-- Result summary: right under the photo on phones, at the top of the right column on computers.
@@ -211,6 +212,28 @@
         <h3 id="othersTitle">Other possibilities</h3>
         <ol id="resultOthers" class="others"></ol>
 
+        <section class="study" id="studyBox" hidden aria-labelledby="studyTitle">
+          <h3 id="studyTitle">Study log</h3>
+          <p class="small muted">Study mode is on. Fill in what you know and save; the photo and these details stay on this phone until you export them from History.</p>
+          <form id="studyForm" class="study-form">
+            <label>Barangay<input name="barangay" autocomplete="off"></label>
+            <label>Municipality<input name="municipality" autocomplete="off"></label>
+            <label>Province<input name="province" autocomplete="off"></label>
+            <label>Plant (Filipino / English)<input name="plant" autocomplete="off"></label>
+            <label>Healthy or sick<select name="healthy"><option>sick</option><option>healthy</option><option value="">not sure</option></select></label>
+            <label>What you think it is<input name="guess" autocomplete="off" placeholder="e.g. early blight"></label>
+            <label>Garden or farm<select name="site"><option>garden</option><option>farm</option></select></label>
+            <label>Background<select name="background"><option>natural</option><option>plain paper</option></select></label>
+            <label>Light<select name="light"><option>sun</option><option>shade</option><option>cloudy</option></select></label>
+            <label>Phone model<input name="phone" autocomplete="off"></label>
+            <label class="wide">Notes<input name="notes" autocomplete="off"></label>
+            <div class="study-actions wide">
+              <button id="studySave" class="btn btn-primary" type="submit">Save to study log</button>
+              <span id="studyNote" class="small" role="status"></span>
+            </div>
+          </form>
+        </section>
+
         <div class="feedback" id="feedbackBox">
           <h3>Was this result right?</h3>
           <p class="small muted">Answer once a technician or plant clinic has checked it, or the plant shows clearer signs. You can also answer later under History. Saved only on this device.</p>
@@ -259,6 +282,17 @@
         <ul id="historyList" class="history"></ul>
       </div>
       <p id="historyEmpty" class="empty-note">No scans yet. Results you check appear here.</p>
+
+      <section id="studyLog" class="study-log" hidden aria-labelledby="studyLogTitle">
+        <div class="list-head">
+          <h2 id="studyLogTitle">Study log <span id="studyCount" class="muted"></span></h2>
+          <button id="studyExport" class="btn btn-primary small" type="button">Export photos and photo_log.csv</button>
+        </div>
+        <p class="small muted">Add who confirmed each photo once a teacher or plant clinic has checked it. Exports are a ZIP with the photos and a <code>photo_log.csv</code> in the study's columns.</p>
+        <ul id="studyList" class="study-list"></ul>
+        <p id="studyExportNote" class="small" role="status"></p>
+        <button id="studyClear" class="link-btn" type="button">Delete the study log from this phone</button>
+      </section>
     </section>
 
     <!-- ================================ PLANTS ================================ -->
@@ -298,14 +332,14 @@
 
       <section class="guide-sec">
         <h2>Reading the result</h2>
-        <p>LeafScan was tested on 3,100 farm photos it had never seen. This is how often it was right at each level:</p>
+        <p>LeafScan was tested on 3,100 field photos from public datasets that it had never seen (not yet photos from Philippine farms). This is how often it was right at each level:</p>
         <dl class="bands">
           <div><dt><span class="band-dot confident"></span>High confidence <small>70% and above</small></dt><dd>Right about <b>9 in 10</b> times. Still compare the signs before you act.</dd></div>
           <div><dt><span class="band-dot moderate"></span>Medium confidence <small>45 to 70%</small></dt><dd>Right about <b>7 in 10</b> times. Answer the questions or add another leaf.</dd></div>
           <div><dt><span class="band-dot unsure"></span>Not sure <small>below 45%</small></dt><dd>Right only about <b>4 in 10</b> times. It does not mean the plant is healthy.</dd></div>
-          <div><dt><span class="band-dot unknown"></span>Not recognized <small>below 20%</small></dt><dd>The photo may not be a leaf, or a plant LeafScan knows.</dd></div>
+          <div><dt><span class="band-dot unknown"></span>Not recognized <small>below 25%</small></dt><dd>The photo may not be a leaf, or a plant LeafScan knows.</dd></div>
         </dl>
-        <p class="callout"><b>Tell LeafScan the plant if it guessed wrong.</b> Use “Wrong plant?” on the result. On the same farm photos, choosing the right plant raised accuracy from 72% to 88%.</p>
+        <p class="callout"><b>Tell LeafScan the plant if it guessed wrong.</b> Use “Wrong plant?” on the result. On the same test photos, choosing the right plant raised accuracy from 72% to 88%.</p>
       </section>
 
       <section class="guide-sec">
@@ -317,6 +351,12 @@
           <li>An <b>agriculture teacher</b>, or the agriculture college of a state university near you.</li>
         </ul>
         <p>Use “Show to a technician” on a result to send the leaf photos and LeafScan's answer together. Use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+      </section>
+
+      <section class="guide-sec">
+        <h2>Study mode (for the research team)</h2>
+        <p>Turn this on while collecting photos for the study. After each check, a short form records where and how the photo was taken, and History gets a study log you can export as photos plus a <code>photo_log.csv</code>. Everything stays on this phone until you export it.</p>
+        <label class="switch"><input type="checkbox" id="studyToggle"><span>Study mode</span></label>
       </section>
 
       <section class="guide-sec">

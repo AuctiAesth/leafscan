@@ -1,8 +1,12 @@
-// Offline support: cache the app, the ONNX Runtime files and the model on first visit.
-// Large files that never change (model, runtime) are served from the cache first;
-// the small app files are fetched fresh when online so updates arrive, with the cache as fallback.
-const CACHE = 'leafscan-v7';
-const FILES = [
+// Offline support, in three stores so that updating the app never makes people download the big files again:
+//   leafscan-app-<n>        the small app files; replaced on every app update
+//   leafscan-runtime-<ver>  ONNX Runtime (core about 14 MB, stored by the page); kept until the runtime changes
+//   leafscan-model-<ver>    the model's parts; written by the page itself (app.js), never touched here
+// The page registers this worker only after the model has loaded, so these files come from the browser's
+// own HTTP cache rather than being downloaded a second time.
+const APP_CACHE = 'leafscan-app-9';
+const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
+const APP_FILES = [
   './',
   'index.html',
   'styles.css',
@@ -12,34 +16,46 @@ const FILES = [
   'fonts/spectral-600-latin.woff2',
   'data/kb.json',
   'model/labels.json',
-  'model/plant_disease_mnv3.onnx',
-  'vendor/ort.wasm.min.js',
-  'vendor/ort-wasm-simd-threaded.mjs',
-  'vendor/ort-wasm-simd-threaded.wasm',
+  'model/model.json',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
 ];
-const CACHE_FIRST = /\.(onnx|wasm|mjs|png|svg|woff2)$|\/vendor\//;
+// The 14 MB runtime core (vendor/ort-wasm-simd-threaded.wasm) is stored in RUNTIME_CACHE by the page itself.
+const RUNTIME_FILES = [
+  'vendor/ort.wasm.min.js',
+  'vendor/ort-wasm-simd-threaded.mjs',
+];
+const KEEP = (key) => key === APP_CACHE || key === RUNTIME_CACHE || key.startsWith('leafscan-model-');
+const MODEL_PART = /\/model\/[^/]+\/part-\d+\.bin$/;
+const CACHE_FIRST = /\.(wasm|mjs|png|svg|woff2)$|\/vendor\//;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
+  event.waitUntil(Promise.all([
+    caches.open(APP_CACHE).then((cache) => cache.addAll(APP_FILES)),
+    // Runtime files are fetched only if this version of them is not stored yet.
+    caches.open(RUNTIME_CACHE).then(async (cache) => {
+      const missing = [];
+      for (const f of RUNTIME_FILES) if (!(await cache.match(f))) missing.push(f);
+      if (missing.length) await cache.addAll(missing);
+    }),
+  ]).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('leafscan-') && !KEEP(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
 
-function fetchAndStore(request) {
+function fetchAndStore(request, cacheName) {
   return fetch(request).then((res) => {
     if (res.ok && res.type === 'basic') {
       const copy = res.clone();
-      caches.open(CACHE).then((cache) => cache.put(request, copy));
+      caches.open(cacheName).then((cache) => cache.put(request, copy));
     }
     return res;
   });
@@ -50,10 +66,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  if (CACHE_FIRST.test(url.pathname)) {
-    event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetchAndStore(request)));
+  if (MODEL_PART.test(url.pathname)) {
+    // The page stores model parts itself; just answer from any cache, else the network.
+    event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request)));
+  } else if (CACHE_FIRST.test(url.pathname)) {
+    const store = url.pathname.includes('/vendor/') ? RUNTIME_CACHE : APP_CACHE;
+    event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetchAndStore(request, store)));
   } else {
-    event.respondWith(fetchAndStore(request).catch(() =>
+    event.respondWith(fetchAndStore(request, APP_CACHE).catch(() =>
       caches.match(request, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html'))));
   }
 });

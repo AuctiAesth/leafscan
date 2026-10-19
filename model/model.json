@@ -1,0 +1,29 @@
+{
+ "version": "v2-int8",
+ "source": "plant_disease_mnv3.onnx",
+ "bytes": 4938457,
+ "sha256": "adc9b0c230a956fe36526b1b01e39d3dcc040b98a4806de31716215b620093e1",
+ "parts": [
+  {
+   "file": "part-000.bin",
+   "bytes": 2097152,
+   "sha256": "fe39545a1e0cdf6a2a76d0d9b0bc064e0e6960ab8b42d374d729e1844fa53c5b"
+  },
+  {
+   "file": "part-001.bin",
+   "bytes": 2097152,
+   "sha256": "ce606257b61a33d6a4bdcdcc98f1981c16f72c7f8a3772e0d774750eaff5044b"
+  },
+  {
+   "file": "part-002.bin",
+   "bytes": 744153,
+   "sha256": "0c43dea170a3e2319bb1fc5aa8804a8827229982cd878706871b93dbc15ab91e"
+  }
+ ],
+ "runtime": {
+  "file": "vendor/ort-wasm-simd-threaded.wasm",
+  "cache": "leafscan-runtime-1.29.0",
+  "bytes": 13961845,
+  "sha256": "ec8580a9d7b9476ceee52e10a7f94124e4dc71a019d666ed6d4726697c109a4d"
+ }
+}
