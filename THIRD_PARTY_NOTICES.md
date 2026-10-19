@@ -1,5 +1,10 @@
 # Third-party notices
 
+## Spectral typeface (`fonts/spectral-600-latin.woff2`)
+
+Copyright 2017 The Spectral Project Authors (https://github.com/productiontype/Spectral). Licensed under
+the SIL Open Font License, Version 1.1; the full license is in `fonts/OFL.txt`.
+
 ## ONNX Runtime Web (files in `vendor/`)
 
 MIT License

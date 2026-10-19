@@ -49,3 +49,4 @@ Non-commercial use only, because of the licenses of the data and knowledge sourc
 - **Scientific names:** checked against the GBIF Backbone Taxonomy.
 - **Model:** MobileNetV3 (Howard et al., 2019) with ImageNet weights from torchvision.
 - **ONNX Runtime Web 1.29.0:** MIT License; see `THIRD_PARTY_NOTICES.md`.
+- **Spectral typeface:** SIL Open Font License 1.1; see `fonts/OFL.txt`.

@@ -72,6 +72,9 @@
     techNote: $('techNote'),
     historyCard: $('historyCard'), historyList: $('historyList'), clearHistory: $('clearHistory'), tally: $('tally'),
     cropList: $('cropList'), installBtn: $('installBtn'), offlineNote: $('offlineNote'),
+    brandBtn: $('brandBtn'), navrow: $('navrow'), tabs: [...document.querySelectorAll('#navrow [data-view]')],
+    intro: $('intro'), introFacts: $('introFacts'), historyCount: $('historyCount'), historyEmpty: $('historyEmpty'),
+    plantFilter: $('plantFilter'), plantsLede: $('plantsLede'), plantsEmpty: $('plantsEmpty'),
     dialog: $('cameraDialog'), video: $('cameraVideo'), shutter: $('cameraShutter'),
     cameraCancel: $('cameraCancel'), cameraSwitch: $('cameraSwitch'),
   };
@@ -255,6 +258,8 @@
       shown = null;
     }
     setAdding(false);
+    el.intro.hidden = true;
+    showView('scan');
     source = { image, w, h, id: `${Date.now()}-${Math.random()}` };
     checked = null;
     resetView();
@@ -749,6 +754,7 @@
     el.detailsCard.hidden = false;
     renderPlantSelect();
     el.chip.className = `chip ${doubtful ? 'unsure' : kind}`;
+    el.summaryCard.dataset.kind = doubtful ? 'unsure' : kind;
     el.chip.textContent = {
       uncovered: 'Not covered', 'healthy-only': 'Not covered', unknown: 'Not recognized', unsure: 'Not sure',
     }[outcome] || CHIP[band][kind];
@@ -1090,24 +1096,78 @@
     ul.replaceChildren(...items.map((t) => make('li', null, t)));
   }
 
+  // The catalogue of supported plants: one row per plant with its local and scientific names and the
+  // problems LeafScan recognizes on it, filterable by any of those words.
   function renderCrops() {
-    const crops = new Map();
-    entries.forEach((e) => {
+    const byHost = new Map();
+    entries.forEach((e, i) => {
       if (!e.host) return;
-      crops.set(e.host, (crops.get(e.host) || 0) + (e.healthy ? 0 : 1));
+      if (!byHost.has(e.host)) byHost.set(e.host, []);
+      if (!e.healthy) byHost.get(e.host).push(describe(i).name);
     });
-    const problems = [...crops.values()].reduce((a, b) => a + b, 0);
-    el.emptySub.textContent = `Recognizes ${problems} problems on ${crops.size} plants. The photo never leaves your device.`;
-    const sorted = [...crops].sort((a, b) => (kb.hosts[a[0]]?.en || '').localeCompare(kb.hosts[b[0]]?.en || ''));
-    el.cropList.replaceChildren(...sorted.map(([host, n]) => {
+    const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
+    const problems = [...byHost.values()].reduce((sum, names) => sum + names.length, 0);
+    el.emptySub.textContent = `Recognizes ${problems} problems on ${hosts.length} plants. The photo never leaves your device.`;
+    el.introFacts.textContent = `${problems} problems on ${hosts.length} plants · about 7 in 10 right on farm photos · photos never leave your device`;
+    el.plantsLede.textContent = `${hosts.length} plants and ${problems} problems, plus healthy leaves of each plant. ` +
+      'Scientific names are checked against the GBIF Backbone Taxonomy.';
+    el.cropList.replaceChildren(...hosts.map((host) => {
       const h = kb.hosts[host] || { en: host };
+      const names = byHost.get(host).sort((a, b) => a.localeCompare(b));
       const li = document.createElement('li');
-      li.append(`${h.en} `);
-      if (h.scientific) li.append(italic(h.scientific), h.rank === 'genus' ? ' spp. ' : ' ');
-      li.append(make('span', null, n ? `· ${n} ${n === 1 ? 'problem' : 'problems'}` : '· healthy only'));
+      li.dataset.search = [h.en, h.fil, h.scientific, ...names].filter(Boolean).join(' ').toLowerCase();
+      const head = make('div', 'pr-head');
+      head.append(make('span', 'pr-name', h.en));
+      if (h.fil) head.append(make('span', 'pr-fil', h.fil));
+      head.append(make('span', 'pr-n', names.length ? `${names.length} ${names.length === 1 ? 'problem' : 'problems'}` : 'healthy leaves only'));
+      const sci = make('p', 'pr-sci');
+      if (h.scientific) sci.append(italic(h.scientific), h.rank === 'genus' ? ' spp.' : '');
+      li.append(head, sci, make('p', 'pr-list', names.join(' · ')));
       return li;
     }));
   }
+
+  el.plantFilter.addEventListener('input', () => {
+    const q = el.plantFilter.value.trim().toLowerCase();
+    let visible = 0;
+    for (const li of el.cropList.children) {
+      const hit = !q || li.dataset.search.includes(q);
+      li.hidden = !hit;
+      if (hit) visible++;
+    }
+    el.plantsEmpty.hidden = visible > 0;
+  });
+
+  // ---------- Sections (Scan, History, Plants, Guide) ----------
+  // Switched in place, without changing the URL: on iPhone home-screen apps a URL change can reset the
+  // camera permission (WebKit bug 215884).
+
+  let section = 'scan';
+
+  function showView(name, { focusTab = false } = {}) {
+    if (name === section) return;
+    section = name;
+    for (const b of el.tabs) {
+      const on = b.dataset.view === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      $(`view-${b.dataset.view}`).hidden = !on;
+      if (on && focusTab) b.focus();
+    }
+    window.scrollTo(0, 0); // the user chose another section: start it at the top
+    if (name === 'scan') scheduleRender();
+  }
+
+  el.tabs.forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+  el.navrow.addEventListener('keydown', (e) => {
+    const i = el.tabs.findIndex((b) => b.dataset.view === section);
+    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: el.tabs.length - 1 }[e.key];
+    if (next == null) return;
+    e.preventDefault();
+    showView(el.tabs[(next + el.tabs.length) % el.tabs.length].dataset.view, { focusTab: true });
+  });
+  el.brandBtn.addEventListener('click', () => showView('scan'));
 
   // ---------- History and feedback (stored only on this device) ----------
 
@@ -1153,6 +1213,9 @@
   function renderHistory() {
     const items = readHistory();
     el.historyCard.hidden = items.length === 0;
+    el.historyEmpty.hidden = items.length > 0;
+    el.historyCount.hidden = items.length === 0;
+    el.historyCount.textContent = String(items.length);
     el.historyList.replaceChildren(...items.map((h) => {
       const name = historyName(h);
       const li = document.createElement('li');
@@ -1226,7 +1289,7 @@
     el.feedbackNote.textContent = !f ? '' : {
       right: 'Saved as right. Thank you.',
       wrong: 'Saved as wrong. Please get a second opinion before treating the plant (see "Still not sure" below).',
-      unknown: 'Saved. You can answer later under Recent scans.',
+      unknown: 'Saved. You can answer later under History.',
       unlisted: 'Saved. A plant clinic or an agriculture teacher can identify it (see "Still not sure" below).',
     }[f.a];
   }

@@ -1,7 +1,7 @@
 // Offline support: cache the app, the ONNX Runtime files and the model on first visit.
 // Large files that never change (model, runtime) are served from the cache first;
 // the small app files are fetched fresh when online so updates arrive, with the cache as fallback.
-const CACHE = 'leafscan-v6';
+const CACHE = 'leafscan-v7';
 const FILES = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const FILES = [
   'app.js',
   'worker.js',
   'manifest.webmanifest',
+  'fonts/spectral-600-latin.woff2',
   'data/kb.json',
   'model/labels.json',
   'model/plant_disease_mnv3.onnx',
@@ -20,7 +21,7 @@ const FILES = [
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
 ];
-const CACHE_FIRST = /\.(onnx|wasm|mjs|png|svg)$|\/vendor\//;
+const CACHE_FIRST = /\.(onnx|wasm|mjs|png|svg|woff2)$|\/vendor\//;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));

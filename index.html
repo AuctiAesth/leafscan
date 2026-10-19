@@ -5,230 +5,330 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>LeafScan: Plant Disease Detector</title>
   <meta name="description" content="Take or upload a photo of a leaf to detect plant diseases on your device, even offline.">
-  <meta name="theme-color" content="#1f7a4d" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1a14" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#1c5136" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#173826" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/spectral-600-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="LeafScan">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Two tiers that read as one object: identity in green, navigation in near-black, gold marks where you are. -->
   <header class="topbar">
-    <div class="brand">
-      <img src="icons/icon.svg" alt="" width="30" height="30">
-      <div>
-        <h1>LeafScan</h1>
-        <p class="tagline">Plant disease detection by image recognition</p>
+    <div class="topbar-id">
+      <div class="topbar-in">
+        <button class="brand" id="brandBtn" type="button" aria-label="LeafScan: go to Scan">
+          <img src="icons/icon.svg" alt="" width="32" height="32">
+          <span class="brand-text">
+            <span class="wordmark">LeafScan</span>
+            <span class="wordmark-sub">Plant disease detection · <em>works offline</em></span>
+          </span>
+        </button>
+        <button id="installBtn" class="ghostbtn" type="button" hidden>Install app</button>
       </div>
     </div>
-    <button id="installBtn" class="btn btn-ghost" hidden>Install app</button>
+    <nav class="topbar-nav" aria-label="Sections">
+      <div class="topbar-in">
+        <div class="navrow" role="tablist" id="navrow">
+          <button type="button" role="tab" id="tab-scan" data-view="scan" aria-controls="view-scan" aria-selected="true" class="active">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
+            Scan
+          </button>
+          <button type="button" role="tab" id="tab-history" data-view="history" aria-controls="view-history" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-2.05-4.95L14 10h7V3l-2.64 2.64A8.97 8.97 0 0 0 12 3zm-1 4v6l5 3 1-1.6-4-2.4V7h-2z" fill="currentColor"/></svg>
+            History <span class="tab-n" id="historyCount" hidden></span>
+          </button>
+          <button type="button" role="tab" id="tab-plants" data-view="plants" aria-controls="view-plants" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 3c-7.5 0-12 3.6-12 9.3 0 1.4.3 2.7.9 3.8C7.5 17.4 6.6 19 6.2 21h2c.4-1.5 1.1-2.7 2-3.6.9.4 1.9.6 3 .6 5.3 0 6.8-6.3 6.8-15zm-7.8 13c-.6 0-1.2-.1-1.7-.3 1.6-1.3 3.6-2.3 5.9-3l-.5-1.9c-2.6.7-4.9 1.9-6.7 3.4-.1-.5-.2-1-.2-1.6C9 8.7 12.3 5.6 17.9 5c-.4 6.8-2.2 11-5.7 11z" fill="currentColor"/></svg>
+            Plants
+          </button>
+          <button type="button" role="tab" id="tab-guide" data-view="guide" aria-controls="view-guide" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5a.5.5 0 0 0 0 1H20v2H6.5A2.5 2.5 0 0 1 4 19.5v-15zM6.5 4a.5.5 0 0 0-.5.5v12.55c.16-.03.33-.05.5-.05H18V4H6.5zM8 6h8v2H8V6z" fill="currentColor"/></svg>
+            Guide
+          </button>
+        </div>
+      </div>
+    </nav>
   </header>
 
-  <main class="layout">
-    <!-- Left (or top on phones): the photo, the square the model checks, and the framing tools -->
-    <section class="card scan" id="scanCard" aria-labelledby="scanTitle">
-      <h2 id="scanTitle" class="visually-hidden">Photo of the leaf</h2>
+  <main>
+    <!-- ================================ SCAN ================================ -->
+    <section id="view-scan" class="view layout" role="tabpanel" aria-labelledby="tab-scan">
+      <div class="intro" id="intro">
+        <p class="eyebrow">Free · on your device · works offline</p>
+        <h1 class="display">What is wrong with this leaf?</h1>
+        <p class="lede">Photograph one sick leaf. LeafScan names the likely problem, says how sure it is, and shows what you can do, summarized from published expert sources.</p>
+        <ol class="steps">
+          <li><span class="step-n">1</span><span><b>Photograph</b> one leaf in even light.</span></li>
+          <li><span class="step-n">2</span><span><b>Fit</b> the leaf inside the square.</span></li>
+          <li><span class="step-n">3</span><span><b>Compare</b> the signs, then act.</span></li>
+        </ol>
+        <p class="facts" id="introFacts"></p>
+      </div>
 
-      <div id="stage" class="stage" tabindex="0"
-           aria-label="Leaf photo. Drag or pinch to move the leaf into the square, or use the arrow and plus or minus keys.">
-        <div id="emptyState" class="empty">
-          <svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true"><path d="M52 10C30 10 14 22 14 40c0 4 1 8 3 11 2-9 9-18 20-24-8 6-14 14-16 25 3 2 7 3 11 3 18 0 22-23 20-45z" fill="currentColor" opacity=".9"/></svg>
-          <p class="empty-title">Photograph one leaf</p>
-          <p class="empty-sub" id="emptySub">The photo never leaves your device.</p>
+      <!-- The photo, the square the model checks, and the framing tools -->
+      <section class="panel scan" id="scanCard" aria-labelledby="scanTitle">
+        <h2 id="scanTitle" class="visually-hidden">Photo of the leaf</h2>
+
+        <div id="stage" class="stage" tabindex="0"
+             aria-label="Leaf photo. Drag or pinch to move the leaf into the square, or use the arrow and plus or minus keys.">
+          <div id="emptyState" class="empty">
+            <svg viewBox="0 0 64 64" width="48" height="48" aria-hidden="true"><path d="M52 10C30 10 14 22 14 40c0 4 1 8 3 11 2-9 9-18 20-24-8 6-14 14-16 25 3 2 7 3 11 3 18 0 22-23 20-45z" fill="currentColor" opacity=".9"/></svg>
+            <p class="empty-title">Photograph one leaf</p>
+            <p class="empty-sub" id="emptySub">The photo never leaves your device.</p>
+          </div>
+          <canvas id="previewCanvas" class="photo" hidden></canvas>
+          <div id="frame" class="frame" hidden aria-hidden="true"><span class="frame-label">LeafScan checks this square</span></div>
         </div>
-        <canvas id="previewCanvas" class="photo" hidden></canvas>
-        <div id="frame" class="frame" hidden aria-hidden="true"><span class="frame-label">LeafScan checks this square</span></div>
-      </div>
 
-      <div id="tools" class="tools" hidden>
-        <button id="zoomOutBtn" class="tool" type="button" aria-label="Zoom out">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 11h14v2H5z" fill="currentColor"/></svg>
-        </button>
-        <output id="zoomLevel" class="zoom-level" aria-live="off">1.0×</output>
-        <button id="zoomInBtn" class="tool" type="button" aria-label="Zoom in">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
-        </button>
-        <button id="resetBtn" class="tool" type="button" aria-label="Reset zoom and position" title="Reset">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z" fill="currentColor"/></svg>
-        </button>
-        <span class="tools-gap"></span>
-        <button id="retakeBtn" class="tool" type="button" aria-label="Take a new photo" title="Take a new photo">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
-        </button>
-        <button id="pickBtn" class="tool" type="button" aria-label="Choose another photo from the gallery" title="Choose from gallery">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
-        </button>
-      </div>
-      <p id="hint" class="hint" hidden>Drag or pinch so one leaf fills the square.</p>
+        <div id="tools" class="tools" hidden>
+          <button id="zoomOutBtn" class="tool" type="button" aria-label="Zoom out">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 11h14v2H5z" fill="currentColor"/></svg>
+          </button>
+          <output id="zoomLevel" class="zoom-level" aria-live="off">1.0×</output>
+          <button id="zoomInBtn" class="tool" type="button" aria-label="Zoom in">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+          </button>
+          <button id="resetBtn" class="tool" type="button" aria-label="Reset zoom and position" title="Reset">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z" fill="currentColor"/></svg>
+          </button>
+          <span class="tools-gap"></span>
+          <button id="retakeBtn" class="tool" type="button" aria-label="Take a new photo" title="Take a new photo">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
+          </button>
+          <button id="pickBtn" class="tool" type="button" aria-label="Choose another photo from the gallery" title="Choose from gallery">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <p id="hint" class="hint" hidden>Drag or pinch so one leaf fills the square.</p>
 
-      <div id="addBanner" class="add-banner" hidden>
-        <p id="addText"><b>Add another leaf</b> from the same plant. Results from all leaves are combined.</p>
-        <button id="addCancel" class="btn btn-ghost small" type="button">Cancel</button>
-      </div>
+        <div id="addBanner" class="add-banner" hidden>
+          <p id="addText"><b>Add another leaf</b> from the same plant. Results from all leaves are combined.</p>
+          <button id="addCancel" class="btn btn-ghost small" type="button">Cancel</button>
+        </div>
 
-      <div id="actions" class="actions">
-        <button id="cameraBtn" class="btn btn-primary" disabled>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
-          Take photo
-        </button>
-        <button id="uploadBtn" class="btn btn-secondary" disabled>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
-          From gallery
-        </button>
-        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
-        <input id="fileInput" type="file" accept="image/*" hidden>
-      </div>
+        <div id="actions" class="actions">
+          <button id="cameraBtn" class="btn btn-primary" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 4 7.5 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" fill="currentColor"/></svg>
+            Take photo
+          </button>
+          <button id="uploadBtn" class="btn btn-secondary" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H4zm0 2h16v7.6l-3.3-3.3a1 1 0 0 0-1.4 0L11 15.6l-2.3-2.3a1 1 0 0 0-1.4 0L4 16.6V7zm4.5 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg>
+            From gallery
+          </button>
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+          <input id="fileInput" type="file" accept="image/*" hidden>
+        </div>
 
-      <p id="status" class="status" role="status" aria-live="polite">Loading the AI model…</p>
-      <div id="progress" class="progress" aria-hidden="true"><span></span></div>
-    </section>
+        <p id="status" class="status" role="status" aria-live="polite">Loading the AI model…</p>
+        <div id="progress" class="progress" aria-hidden="true"><span></span></div>
+      </section>
 
-    <!-- Result summary: sits right under the photo on phones, at the top of the right column on computers.
-         It only changes when a check finishes, never while the photo is being moved. -->
-    <section class="card summary" id="summaryCard" hidden aria-labelledby="resultName">
-      <div id="summaryBody" class="summary-body" role="status" aria-live="polite" aria-atomic="true">
-        <div class="sum-head">
-          <span id="resultChip" class="chip"></span>
-          <label class="plant-pick" title="Wrong plant? Choose the right one.">
-            <span class="visually-hidden">Plant</span>
-            <select id="plantSelect"></select>
+      <!-- Result summary: right under the photo on phones, at the top of the right column on computers.
+           It only changes when a check finishes, never while the photo is being moved. -->
+      <section class="panel summary" id="summaryCard" hidden aria-labelledby="resultName">
+        <div id="summaryBody" class="summary-body" role="status" aria-live="polite" aria-atomic="true">
+          <div class="sum-head">
+            <span id="resultChip" class="chip"></span>
+            <label class="plant-pick" title="Wrong plant? Choose the right one.">
+              <span class="visually-hidden">Plant</span>
+              <select id="plantSelect"></select>
+            </label>
+          </div>
+          <p id="resultPlant" class="result-plant"></p>
+          <h2 id="resultName" class="result-name"></h2>
+          <p id="resultSci" class="result-sci"></p>
+          <div class="conf-row">
+            <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence" id="resultMeter"><span id="resultBar"></span></div>
+            <span id="resultConf" class="conf-num"></span>
+          </div>
+          <p class="conf-line"><span id="confWord"></span><span id="resultBasis"></span><span id="resultDelta" class="delta"></span></p>
+        </div>
+
+        <div class="message-slot">
+          <div id="resultMessage" class="message"></div>
+          <div id="staleBar" class="stale-bar" hidden>
+            <p><b>The square moved.</b><span class="visually-hidden"> This result is for the old square.</span></p>
+            <button id="checkBtn" class="btn btn-primary" type="button">Check this leaf</button>
+          </div>
+        </div>
+
+        <ul id="leafStrip" class="leaf-strip" hidden aria-label="Leaves in this result"></ul>
+
+        <div class="sum-actions">
+          <button id="addLeafBtn" class="btn btn-secondary small" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
+            Add another leaf
+          </button>
+          <button id="techBtn" class="btn btn-ghost small" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z" fill="currentColor"/></svg>
+            Show to a technician
+          </button>
+          <label class="switch">
+            <input type="checkbox" id="autoCheck">
+            <span>Check again by itself when I let go</span>
           </label>
         </div>
-        <p id="resultPlant" class="result-plant"></p>
-        <h2 id="resultName" class="result-name"></h2>
-        <p id="resultSci" class="result-sci"></p>
-        <div class="conf-row">
-          <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence" id="resultMeter"><span id="resultBar"></span></div>
-          <span id="resultConf" class="conf-num"></span>
+      </section>
+
+      <!-- Details read as a document on the page, separated by hairlines, not as another box. -->
+      <section class="details" id="detailsCard" hidden aria-label="Details">
+        <div id="confirmBox" class="confirm" hidden>
+          <div class="row-between">
+            <h3>Help narrow it down</h3>
+            <span id="confirmCount" class="small muted"></span>
+          </div>
+          <div id="confirmStep">
+            <p class="small muted">Look closely at the leaf (or other leaves on the plant).</p>
+            <p id="confirmQ" class="confirm-q"></p>
+            <p id="confirmWhy" class="small muted"></p>
+            <div class="answer-row" role="group" aria-labelledby="confirmQ">
+              <button type="button" class="btn btn-secondary" data-a="yes">Yes <span lang="fil">(Oo)</span></button>
+              <button type="button" class="btn btn-secondary" data-a="no">No <span lang="fil">(Hindi)</span></button>
+              <button type="button" class="btn btn-ghost" data-a="skip">Not sure <span lang="fil">(Hindi ko alam)</span></button>
+            </div>
+            <button id="confirmBack" class="link-btn" type="button" hidden>Back to the last question</button>
+          </div>
+          <div id="confirmDone" hidden>
+            <p id="confirmResult"></p>
+            <button id="confirmRestart" class="link-btn" type="button">Answer the questions again</button>
+          </div>
         </div>
-        <p class="conf-line"><span id="confWord"></span><span id="resultBasis"></span><span id="resultDelta" class="delta"></span></p>
-      </div>
 
-      <div class="message-slot">
-        <div id="resultMessage" class="message"></div>
-        <div id="staleBar" class="stale-bar" hidden>
-          <p><b>The square moved.</b><span class="visually-hidden"> This result is for the old square.</span></p>
-          <button id="checkBtn" class="btn btn-primary" type="button">Check this leaf</button>
+        <div id="resultDetails">
+          <h3 id="symptomsTitle">What it looks like</h3>
+          <p id="resultSymptoms"></p>
+          <h3 id="lookTitle">Does your leaf show these signs?</h3>
+          <ul id="resultLook" class="plainlist"></ul>
+          <h3 id="manageTitle">What you can do</h3>
+          <ul id="resultManage" class="checklist"></ul>
+          <p id="chemNote" class="chem-note" hidden></p>
         </div>
-      </div>
 
-      <ul id="leafStrip" class="leaf-strip" hidden aria-label="Leaves in this result"></ul>
+        <h3 id="othersTitle">Other possibilities</h3>
+        <ol id="resultOthers" class="others"></ol>
 
-      <div class="sum-actions">
-        <button id="addLeafBtn" class="btn btn-secondary small" type="button">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z" fill="currentColor"/></svg>
-          Add another leaf
-        </button>
-        <button id="techBtn" class="btn btn-ghost small" type="button">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z" fill="currentColor"/></svg>
-          Show to a technician
-        </button>
-        <label class="switch">
-          <input type="checkbox" id="autoCheck">
-          <span>Check again by itself when I let go</span>
-        </label>
-      </div>
+        <div class="feedback" id="feedbackBox">
+          <h3>Was this result right?</h3>
+          <p class="small muted">Answer once a technician or plant clinic has checked it, or the plant shows clearer signs. You can also answer later under History. Saved only on this device.</p>
+          <div class="seg" id="feedbackSeg" role="group" aria-label="Was this result right?">
+            <button type="button" data-a="right" aria-pressed="false">Right <span lang="fil">(Tama)</span></button>
+            <button type="button" data-a="wrong" aria-pressed="false">Wrong <span lang="fil">(Mali)</span></button>
+            <button type="button" data-a="unknown" aria-pressed="false">Not sure yet</button>
+          </div>
+          <button id="unlistedBtn" class="link-btn" type="button">My plant's problem is not in LeafScan's list</button>
+          <p id="feedbackNote" class="small" role="status"></p>
+        </div>
+
+        <div id="sourcesBox">
+          <h3>Expert sources</h3>
+          <ul id="resultSources" class="sources"></ul>
+          <p id="resultNote" class="small muted"></p>
+        </div>
+
+        <div class="help-card">
+          <h3>Still not sure, or many plants are sick?</h3>
+          <p>Ask a plant clinic for a second opinion:</p>
+          <ul class="help-list">
+            <li><b>UPLB Pest Clinic</b>: send fresh sick leaves by courier, and they email a diagnosis report, usually within 7 working days.
+              <a href="https://iwep.cafs.uplb.edu.ph/pest-clinic/" target="_blank" rel="noopener noreferrer">How to send a sample</a></li>
+            <li><b>DA Regional Crop Protection Center</b> at your Department of Agriculture regional office. Some run a Plant Health Clinic.</li>
+            <li>An <b>agriculture teacher</b>, or the agriculture college of a state university near you.</li>
+          </ul>
+          <p class="small muted">To send a sample: wrap several fresh sick leaves (and the stem if it is affected) in dry paper, put them in a plastic bag, and send them the same day. Include photos and this result.</p>
+        </div>
+        <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician or a plant clinic, and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+      </section>
     </section>
 
-    <section class="card details" id="detailsCard" hidden>
-      <div id="confirmBox" class="confirm" hidden>
-        <div class="row-between">
-          <h3>Help narrow it down</h3>
-          <span id="confirmCount" class="small muted"></span>
+    <!-- ================================ HISTORY ================================ -->
+    <section id="view-history" class="view page" role="tabpanel" aria-labelledby="tab-history" hidden>
+      <header class="view-head">
+        <p class="eyebrow">Saved only on this device</p>
+        <h1 class="display">History</h1>
+        <p class="lede">Your last eight scans. Once you know the real cause, mark each one right or wrong to see how often LeafScan is right for you.</p>
+      </header>
+      <div id="historyCard" hidden>
+        <div class="list-head">
+          <p id="tally" class="tally" hidden></p>
+          <button id="clearHistory" class="link-btn" type="button">Clear history</button>
         </div>
-        <div id="confirmStep">
-          <p class="small muted">Look closely at the leaf (or other leaves on the plant).</p>
-          <p id="confirmQ" class="confirm-q"></p>
-          <p id="confirmWhy" class="small muted"></p>
-          <div class="answer-row" role="group" aria-labelledby="confirmQ">
-            <button type="button" class="btn btn-secondary" data-a="yes">Yes <span lang="fil">(Oo)</span></button>
-            <button type="button" class="btn btn-secondary" data-a="no">No <span lang="fil">(Hindi)</span></button>
-            <button type="button" class="btn btn-ghost" data-a="skip">Not sure <span lang="fil">(Hindi ko alam)</span></button>
-          </div>
-          <button id="confirmBack" class="link-btn" type="button" hidden>Back to the last question</button>
-        </div>
-        <div id="confirmDone" hidden>
-          <p id="confirmResult"></p>
-          <button id="confirmRestart" class="link-btn" type="button">Answer the questions again</button>
-        </div>
+        <ul id="historyList" class="history"></ul>
       </div>
+      <p id="historyEmpty" class="empty-note">No scans yet. Results you check appear here.</p>
+    </section>
 
-      <div id="resultDetails">
-        <h3 id="symptomsTitle">What it looks like</h3>
-        <p id="resultSymptoms"></p>
-        <h3 id="lookTitle">Does your leaf show these signs?</h3>
-        <ul id="resultLook" class="plainlist"></ul>
-        <h3 id="manageTitle">What you can do</h3>
-        <ul id="resultManage" class="checklist"></ul>
-        <p id="chemNote" class="chem-note" hidden></p>
-      </div>
+    <!-- ================================ PLANTS ================================ -->
+    <section id="view-plants" class="view page" role="tabpanel" aria-labelledby="tab-plants" hidden>
+      <header class="view-head">
+        <p class="eyebrow">What LeafScan knows</p>
+        <h1 class="display">Supported plants</h1>
+        <p class="lede" id="plantsLede">The plants and problems LeafScan can recognize, with healthy leaves of each plant.</p>
+      </header>
+      <label class="searchbox">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z" fill="currentColor"/></svg>
+        <span class="visually-hidden">Find a plant or problem</span>
+        <input id="plantFilter" type="search" placeholder="Find a plant or problem, e.g. kamatis or rust" autocomplete="off">
+      </label>
+      <ul id="cropList" class="plant-rows"></ul>
+      <p id="plantsEmpty" class="empty-note" hidden>No plant or problem matches that. LeafScan may not know it yet.</p>
+    </section>
 
-      <h3 id="othersTitle">Other possibilities</h3>
-      <ol id="resultOthers" class="others"></ol>
+    <!-- ================================ GUIDE ================================ -->
+    <section id="view-guide" class="view page" role="tabpanel" aria-labelledby="tab-guide" hidden>
+      <header class="view-head">
+        <p class="eyebrow">Guide</p>
+        <h1 class="display">Using LeafScan well</h1>
+        <p class="lede">How to take a photo it can read, what its answers mean, and where to get a second opinion.</p>
+      </header>
 
-      <div class="feedback" id="feedbackBox">
-        <h3>Was this result right?</h3>
-        <p class="small muted">Answer once a technician or plant clinic has checked it, or the plant shows clearer signs. You can also answer later under Recent scans. Saved only on this device.</p>
-        <div class="seg" id="feedbackSeg" role="group" aria-label="Was this result right?">
-          <button type="button" data-a="right" aria-pressed="false">Right <span lang="fil">(Tama)</span></button>
-          <button type="button" data-a="wrong" aria-pressed="false">Wrong <span lang="fil">(Mali)</span></button>
-          <button type="button" data-a="unknown" aria-pressed="false">Not sure yet</button>
-        </div>
-        <button id="unlistedBtn" class="link-btn" type="button">My plant's problem is not in LeafScan's list</button>
-        <p id="feedbackNote" class="small" role="status"></p>
-      </div>
+      <section class="guide-sec">
+        <h2>Taking a good photo</h2>
+        <ol class="numbered">
+          <li><b>One leaf</b> that fills most of the square, showing the side with the spots.</li>
+          <li><b>Hold the phone flat</b> above the leaf and keep still. Tilted or blurry photos are often wrong.</li>
+          <li><b>Even light</b>: shade or near a window, no harsh shadows or dark corners.</li>
+          <li><b>Plain background</b> if you can, such as paper, a table or your palm.</li>
+          <li>If the result is not sure, <b>add 2 or 3 leaves</b> from the same plant. More leaves give a more reliable answer.</li>
+        </ol>
+      </section>
 
-      <div id="sourcesBox">
-        <h3>Expert sources</h3>
-        <ul id="resultSources" class="sources"></ul>
-        <p id="resultNote" class="small muted"></p>
-      </div>
+      <section class="guide-sec">
+        <h2>Reading the result</h2>
+        <p>LeafScan was tested on 3,100 farm photos it had never seen. This is how often it was right at each level:</p>
+        <dl class="bands">
+          <div><dt><span class="band-dot confident"></span>High confidence <small>70% and above</small></dt><dd>Right about <b>9 in 10</b> times. Still compare the signs before you act.</dd></div>
+          <div><dt><span class="band-dot moderate"></span>Medium confidence <small>45 to 70%</small></dt><dd>Right about <b>7 in 10</b> times. Answer the questions or add another leaf.</dd></div>
+          <div><dt><span class="band-dot unsure"></span>Not sure <small>below 45%</small></dt><dd>Right only about <b>4 in 10</b> times. It does not mean the plant is healthy.</dd></div>
+          <div><dt><span class="band-dot unknown"></span>Not recognized <small>below 20%</small></dt><dd>The photo may not be a leaf, or a plant LeafScan knows.</dd></div>
+        </dl>
+        <p class="callout"><b>Tell LeafScan the plant if it guessed wrong.</b> Use “Wrong plant?” on the result. On the same farm photos, choosing the right plant raised accuracy from 72% to 88%.</p>
+      </section>
 
-      <div class="help-card">
-        <h3>Still not sure, or many plants are sick?</h3>
-        <p>Ask a plant clinic for a second opinion:</p>
+      <section class="guide-sec">
+        <h2>Getting a second opinion</h2>
         <ul class="help-list">
           <li><b>UPLB Pest Clinic</b>: send fresh sick leaves by courier, and they email a diagnosis report, usually within 7 working days.
             <a href="https://iwep.cafs.uplb.edu.ph/pest-clinic/" target="_blank" rel="noopener noreferrer">How to send a sample</a></li>
           <li><b>DA Regional Crop Protection Center</b> at your Department of Agriculture regional office. Some run a Plant Health Clinic.</li>
           <li>An <b>agriculture teacher</b>, or the agriculture college of a state university near you.</li>
         </ul>
-        <p class="small muted">To send a sample: wrap several fresh sick leaves (and the stem if it is affected) in dry paper, put them in a plastic bag, and send them the same day. Include photos and this result.</p>
-      </div>
-      <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician or a plant clinic, and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
-    </section>
+        <p>Use “Show to a technician” on a result to send the leaf photos and LeafScan's answer together. Use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+      </section>
 
-    <section class="card" id="historyCard" hidden>
-      <div class="row-between">
-        <h2>Recent scans</h2>
-        <button id="clearHistory" class="btn btn-ghost small">Clear</button>
-      </div>
-      <p id="tally" class="small muted" hidden></p>
-      <ul id="historyList" class="history"></ul>
-    </section>
-
-    <section class="card tips" id="tipsCard">
-      <h2>How to take a good photo</h2>
-      <ul>
-        <li><b>One leaf</b> that fills most of the square, showing the side with the spots.</li>
-        <li><b>Hold the phone flat</b> above the leaf and keep still. Tilted or blurry photos are often wrong.</li>
-        <li><b>Even light</b>: shade or near a window, no harsh shadows or dark corners.</li>
-        <li><b>Plain background</b> if you can, such as paper, a table or your palm.</li>
-        <li>If the result is not sure, <b>add 2 or 3 leaves</b> from the same plant. More leaves give a more reliable answer.</li>
-      </ul>
-    </section>
-
-    <section class="card" id="cropsCard">
-      <h2>Supported plants</h2>
-      <ul id="cropList" class="crops"></ul>
+      <section class="guide-sec">
+        <h2>About LeafScan</h2>
+        <p>A student research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. A MobileNetV3 image recognition model runs entirely on your device with ONNX Runtime Web, so photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF. Summaries have not yet been reviewed by a plant pathologist. Non-commercial use only.</p>
+        <p id="offlineNote" class="muted small"></p>
+      </section>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. Runs fully on your device with ONNX Runtime Web; photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF.</p>
-    <p id="offlineNote" class="muted small"></p>
+    <p>LeafScan · student research prototype · results can be wrong · photos stay on your device</p>
   </footer>
 
   <dialog id="techDialog" class="tech-dialog" aria-labelledby="techTitle">
