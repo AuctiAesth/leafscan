@@ -207,10 +207,24 @@
           <h3 id="manageTitle">What you can do</h3>
           <ul id="resultManage" class="checklist"></ul>
           <p id="chemNote" class="chem-note" hidden></p>
+
+          <section id="phBox" class="ph-box" hidden aria-labelledby="phTitle">
+            <h3 id="phTitle">In the Philippines <span lang="fil" class="muted">· Sa Pilipinas</span></h3>
+            <p id="phRule" class="ph-rule" hidden></p>
+            <p id="phNames" class="ph-names" hidden></p>
+            <p id="phText"></p>
+            <ul id="phSteps" class="checklist"></ul>
+          </section>
         </div>
 
         <h3 id="othersTitle">Other possibilities</h3>
         <ol id="resultOthers" class="others"></ol>
+
+        <section id="moreBox" class="more-box" hidden aria-labelledby="moreTitle">
+          <h3 id="moreTitle">Also common in the Philippines</h3>
+          <p class="small muted">LeafScan cannot recognize these from a photo yet. Compare the signs, and ask a plant clinic if they match.</p>
+          <div id="moreList" class="more-list"></div>
+        </section>
 
         <section class="study" id="studyBox" hidden aria-labelledby="studyTitle">
           <h3 id="studyTitle">Study log</h3>
@@ -256,6 +270,8 @@
           <h3>Still not sure, or many plants are sick?</h3>
           <p>Ask a plant clinic for a second opinion:</p>
           <ul class="help-list">
+            <li><b>Bureau of Plant Industry (BPI), Crop Pest Management Division</b>, Quezon City: diagnoses plant samples free of charge for farmers and students. Bring freshly collected sick plants (and whole insects) and fill in their diagnosis form.
+              <a href="https://buplant.da.gov.ph/wp-content/uploads/2024/07/Plant-Pest-Diagnostic.pdf" target="_blank" rel="noopener noreferrer">BPI service guide</a></li>
             <li><b>UPLB Pest Clinic</b>: send fresh sick leaves by courier, and they email a diagnosis report, usually within 7 working days.
               <a href="https://iwep.cafs.uplb.edu.ph/pest-clinic/" target="_blank" rel="noopener noreferrer">How to send a sample</a></li>
             <li><b>DA Regional Crop Protection Center</b> at your Department of Agriculture regional office. Some run a Plant Health Clinic.</li>
@@ -263,7 +279,7 @@
           </ul>
           <p class="small muted">To send a sample: wrap several fresh sick leaves (and the stem if it is affected) in dry paper, put them in a plastic bag, and send them the same day. Include photos and this result.</p>
         </div>
-        <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician or a plant clinic, and use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+        <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician or a plant clinic, and use only products registered with the Fertilizer and Pesticide Authority (FPA), or with DA-BAFS for organic and biological products, following the label.</p>
       </section>
     </section>
 
@@ -345,12 +361,46 @@
       <section class="guide-sec">
         <h2>Getting a second opinion</h2>
         <ul class="help-list">
+          <li><b>Bureau of Plant Industry (BPI), Crop Pest Management Division</b>, Quezon City: free diagnosis for farmers and students. Bring freshly collected sick plants (and whole insects) and fill in their diagnosis form; results that need a lab culture take about 1 to 6 days.
+            <a href="https://buplant.da.gov.ph/wp-content/uploads/2024/07/Plant-Pest-Diagnostic.pdf" target="_blank" rel="noopener noreferrer">BPI service guide</a></li>
           <li><b>UPLB Pest Clinic</b>: send fresh sick leaves by courier, and they email a diagnosis report, usually within 7 working days.
             <a href="https://iwep.cafs.uplb.edu.ph/pest-clinic/" target="_blank" rel="noopener noreferrer">How to send a sample</a></li>
           <li><b>DA Regional Crop Protection Center</b> at your Department of Agriculture regional office. Some run a Plant Health Clinic.</li>
           <li>An <b>agriculture teacher</b>, or the agriculture college of a state university near you.</li>
         </ul>
-        <p>Use “Show to a technician” on a result to send the leaf photos and LeafScan's answer together. Use only pesticides registered with the Fertilizer and Pesticide Authority (FPA), following the label.</p>
+        <p>Use “Show to a technician” on a result to send the leaf photos and LeafScan's answer together.</p>
+      </section>
+
+      <section class="guide-sec">
+        <h2>Philippine rules for treating plants</h2>
+        <ul class="rules">
+          <li><b>Registered products only.</b> Chemical pesticides must be registered with the
+            <a href="https://fpa.da.gov.ph/resources/reports/registered-products/" target="_blank" rel="noopener noreferrer">Fertilizer and Pesticide Authority (FPA)</a>;
+            organic and biological products (botanicals, microbials) are registered with
+            <a href="https://bafs.da.gov.ph/index.php/advisory-on-uncertified-and-unregistered-bio-control-agent-and-soil-amendment-products-with-organic-claim/" target="_blank" rel="noopener noreferrer">DA-BAFS</a>
+            (RA 11511). Check the active ingredient, that your crop is on the label, and that the registration has not expired. Some pesticides are
+            <a href="https://fpa.da.gov.ph/resources/reports/list-of-banned-and-restricted-pesticides/" target="_blank" rel="noopener noreferrer">banned or restricted</a>.</li>
+          <li><b>Neem and soap sprays are insect controls, not disease cures.</b> In the FPA list (30 September 2026), neem (azadirachtin) is registered only as an insecticide for certain crops, and insecticidal soap only for Cavendish banana. LeafScan suggests them only against the insects that spread viruses.</li>
+          <li><b>Do not burn sick plants in the open.</b> The
+            <a href="https://lawphil.net/statutes/repacts/ra2001/ra_9003_2001.html" target="_blank" rel="noopener noreferrer">Ecological Solid Waste Management Act (RA 9003)</a>
+            bans open burning of farm waste. Uproot sick plants, and bury them or seal them in a bag away from the field.</li>
+          <li><b>Homemade plant sprays are not proven against diseases.</b> In a DOST-PCAARRD and UPLB project, some local plant extracts killed insect pests, but plain extracts did not stop plant pathogens in lab tests, and none stopped bacterial wilt.</li>
+          <li><b>Some diseases are under quarantine.</b> Panama disease (Fusarium wilt) of banana, coconut cadang-cadang, cassava witches' broom and citrus huanglongbing have BPI or PCA rules against moving planting material. Do not move plants, suckers, cuttings or soil from a sick farm; report it to the DA regional office, BPI or PCA.</li>
+          <li><b>Spraying comes last.</b> Philippine guides and the national IPM program (KASAKALIKASAN) put sanitation, crop rotation, resistant varieties and healthy seedlings first.</li>
+        </ul>
+      </section>
+
+      <section class="guide-sec">
+        <h2>Words farmers use <span lang="fil" class="muted">· Mga salita</span></h2>
+        <p>Philippine extension guides keep most disease names in English and describe the signs in Filipino. These words come from PhilRice, DA and ATI materials.</p>
+        <div class="table-wrap">
+          <table class="words">
+            <thead><tr><th scope="col">English</th><th scope="col" lang="fil">Filipino</th><th scope="col" lang="ceb">Cebuano</th></tr></thead>
+            <tbody id="wordsBody"></tbody>
+          </table>
+        </div>
+        <ul id="wordWarnings" class="small muted word-warnings"></ul>
+        <p id="wordsSources" class="small muted words-sources"></p>
       </section>
 
       <section class="guide-sec">
@@ -361,7 +411,7 @@
 
       <section class="guide-sec">
         <h2>About LeafScan</h2>
-        <p>A student research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. A MobileNetV3 image recognition model runs entirely on your device with ONNX Runtime Web, so photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with scientific names checked against GBIF. Summaries have not yet been reviewed by a plant pathologist. Non-commercial use only.</p>
+        <p>A student research prototype: <i>Developing a Prototype for Plant Disease Detection Using Image Recognition</i>. A MobileNetV3 image recognition model runs entirely on your device with ONNX Runtime Web, so photos are never uploaded. Disease information is summarized from CABI, PlantVillage (Penn State) and university extension sources, with Philippine notes from PhilRice, DA regional offices, ATI, BPI, DOST-PCAARRD and UPLB, and scientific names checked against GBIF. Summaries have not yet been reviewed by a plant pathologist. Non-commercial use only.</p>
         <p id="offlineNote" class="muted small"></p>
       </section>
     </section>

@@ -468,6 +468,43 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
   background: var(--accent-soft); border: 2px solid var(--accent);
 }
 .chem-note { margin-top: 12px; font-size: .875rem; padding: 9px 12px; border-radius: 8px; background: var(--pest-soft); border-left: 3px solid var(--pest); }
+
+/* Philippine notes: local names, the local situation, quarantine rules and local steps. */
+.ph-box p { margin: 0 0 10px; }
+.ph-box .checklist { margin-top: 4px; }
+.ph-names { font-size: .9rem; color: var(--muted); }
+.ph-rule { font-size: .9rem; padding: 10px 12px; border-radius: 8px; background: var(--disease-soft); border-left: 3px solid var(--disease); }
+.ph-tag {
+  display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 4px; color: var(--gold-ink); border: 1px solid currentColor; vertical-align: 1px;
+}
+.ph-tag.rule { color: var(--disease); }
+
+/* Philippine problems the photo model cannot recognize yet: one expandable row each. */
+.more-box > p { margin: 0 0 8px; }
+.more-list, .pr-more { border-top: 1px solid var(--rule); }
+.more-item { border-bottom: 1px solid var(--rule); }
+.more-item > summary {
+  cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  padding: 11px 0 11px 22px; position: relative; min-height: 44px; box-sizing: border-box;
+}
+.more-item > summary::-webkit-details-marker { display: none; }
+.more-item > summary::before {
+  content: ""; position: absolute; left: 4px; top: 17px; width: 7px; height: 7px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s;
+}
+.more-item[open] > summary::before { transform: rotate(45deg); }
+.more-name { font-weight: 600; }
+.more-local { color: var(--muted); font-size: .88rem; font-style: italic; }
+.more-body { padding: 0 0 14px 22px; font-size: .92rem; }
+.more-body p { margin: 0 0 8px; }
+.more-agent { color: var(--muted); font-size: .86rem; }
+.more-src-title { margin-top: 12px !important; font-size: .8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.pr-more { margin-top: 8px; border-top: 0; }
+.pr-more > summary { cursor: pointer; font-size: .86rem; color: var(--muted); line-height: 1.5; padding: 4px 0; }
+.pr-more-label { color: var(--gold-ink); font-weight: 600; }
+.pr-more[open] > summary { margin-bottom: 6px; }
+.pr-more .more-item:first-of-type { border-top: 1px solid var(--rule); }
 .plainlist { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
 
 .others { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--rule); }
@@ -565,6 +602,14 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 .band-dot.unsure { background: var(--unsure); }
 .band-dot.unknown { background: var(--rule-strong); }
 .callout { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); border-left: 3px solid var(--accent); }
+.rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.rules li { padding-left: 14px; border-left: 2px solid var(--gold); }
+.table-wrap { overflow-x: auto; margin: 12px 0; }
+.words { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.words th, .words td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.words th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.word-warnings { padding-left: 18px; margin: 8px 0; }
+.words-sources { overflow-wrap: anywhere; }
 
 .footer { max-width: 1180px; margin: 0 auto; padding: 18px 24px 36px; border-top: 1px solid var(--rule); font-size: .78rem; color: var(--muted); }
 

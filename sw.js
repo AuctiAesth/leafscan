@@ -4,7 +4,7 @@
 //   leafscan-model-<ver>    the model's parts; written by the page itself (app.js), never touched here
 // The page registers this worker only after the model has loaded, so these files come from the browser's
 // own HTTP cache rather than being downloaded a second time.
-const APP_CACHE = 'leafscan-app-9';
+const APP_CACHE = 'leafscan-app-10';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',

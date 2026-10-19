@@ -66,6 +66,9 @@
     lookTitle: $('lookTitle'), look: $('resultLook'), manageTitle: $('manageTitle'), manage: $('resultManage'),
     chemNote: $('chemNote'), sourcesBox: $('sourcesBox'), sources: $('resultSources'), note: $('resultNote'),
     othersTitle: $('othersTitle'), others: $('resultOthers'),
+    phBox: $('phBox'), phRule: $('phRule'), phNames: $('phNames'), phText: $('phText'), phSteps: $('phSteps'),
+    moreBox: $('moreBox'), moreList: $('moreList'),
+    wordsBody: $('wordsBody'), wordWarnings: $('wordWarnings'), wordsSources: $('wordsSources'),
     confirmBox: $('confirmBox'), confirmCount: $('confirmCount'), confirmStep: $('confirmStep'), confirmQ: $('confirmQ'),
     confirmWhy: $('confirmWhy'), confirmBack: $('confirmBack'), confirmDone: $('confirmDone'),
     confirmResult: $('confirmResult'), confirmRestart: $('confirmRestart'),
@@ -89,6 +92,7 @@
   let kb = { hosts: {}, conditions: [] };
   let byId = new Map();     // knowledge-base id -> condition record
   let entries = [];         // per model output index: { host, record|null, healthy }
+  let keyIndex = new Map(); // "host/slug" (knowledge-base id, or "host/healthy") -> model output index
   let source = null;        // current photo: { image: CanvasImageSource, w, h, id }
   const view = { cx: 0, cy: 0, zoom: 1 };  // the square under the frame, in photo pixels
   let checked = null;       // the square behind the result on screen: { cx, cy, zoom, id }
@@ -229,7 +233,9 @@
       kb = await kbRes.json();
       byId = new Map(kb.conditions.map((c) => [c.id, c]));
       entries = labels.map(mapLabel);
+      keyIndex = new Map(entries.map((e, i) => [keyOf(i), i]));
       renderCrops();
+      renderWords();
       renderPlantSelect();
       renderHistory();
 
@@ -744,14 +750,35 @@
     return Array.from(probs, (p, i) => ({ p, i })).sort((a, b) => b.p - a.p);
   }
 
-  // All classes ranked, and the ranking shown: when the user chose the plant, only that plant's classes,
-  // renormalized so they add up to 100%.
+  // Plants also ranked when the user chooses a plant. "Squash" is the genus Cucurbita (kalabasa), which
+  // includes zucchini (Cucurbita pepo), and only the zucchini classes include a virus disease, the most
+  // damaging squash problem in the Philippines. Choosing zucchini does not add squash. The rates shown for a
+  // chosen plant were measured this way (training/calibrate_app.py, GROUP).
+  const PLANT_GROUP = { squash: ['squash', 'zucchini'] };
+  const inGroup = (host, chosen) => (PLANT_GROUP[chosen] || [chosen]).includes(host);
+  const keyOf = (i) => (entries[i].healthy ? `${entries[i].host}/healthy` : entries[i].record?.id || labels[i].id);
+
+  // All classes ranked, and the ranking shown: when the user chose the plant, only that plant's classes (and
+  // its group's), renormalized so they add up to 100%. A group member's disease counts as the chosen plant's
+  // class of the same name (zucchini powdery mildew is squash powdery mildew when squash is chosen).
   function ranking() {
     const all = rank(combine());
     if (!plantLock || plantLock === OTHER_PLANT) return { ranked: all, all };
-    const mine = all.filter(({ i }) => entries[i].host === plantLock);
-    const total = mine.reduce((s, x) => s + x.p, 0) || 1;
-    return { ranked: mine.map(({ p, i }) => ({ p: p / total, i })), all };
+    const mine = new Map();
+    for (const { p, i } of all) {
+      if (!inGroup(entries[i].host, plantLock)) continue;
+      const twin = entries[i].host === plantLock ? i : keyIndex.get(`${plantLock}/${keyOf(i).split('/')[1]}`) ?? i;
+      mine.set(twin, (mine.get(twin) || 0) + p);
+    }
+    const total = [...mine.values()].reduce((sum, p) => sum + p, 0) || 1;
+    return { ranked: [...mine].map(([i, p]) => ({ p: p / total, i })).sort((a, b) => b.p - a.p), all };
+  }
+
+  // A zucchini class can be the answer when squash was chosen: name the plant the user chose.
+  function chosenPlant(d) {
+    if (!plantLock || plantLock === OTHER_PLANT || d.host === plantLock || !kb.hosts[plantLock]) return d;
+    const h = kb.hosts[plantLock];
+    return { ...d, host: plantLock, plant: h.en, plantFil: h.fil, hostSci: h.scientific, hostRank: h.rank };
   }
 
   const hostHasProblems = (host) => entries.some((e) => e.host === host && !e.healthy);
@@ -830,17 +857,22 @@
     if (d.hostSci) parts.push(italic(d.hostSci), d.hostRank === 'genus' ? ' spp.' : '');
     const r = d.record;
     if (r && r.agent) {
-      parts.push(' · ');
-      const m = r.agent.match(/^(.*?)( (?:pv\.|f\. sp\.|subsp\.) )(.*)$/);
-      if (r.type === 'Virus') parts.push(r.agent);
-      else if (m) parts.push(italic(m[1]), m[2], italic(m[3]));
-      else parts.push(italic(r.agent));
+      parts.push(' · ', ...agentParts(r.agent, r.type));
       const type = r.type.toLowerCase();
       parts.push(type.includes('(') ? `, ${type}` : ` (${type})`);
     } else if (r) {
       parts.push(` · ${r.type}`);
     }
     return parts;
+  }
+
+  // A cause in italics as a scientific name; virus names, pathovars, formae speciales and a trailing note in
+  // brackets stay upright.
+  function agentParts(agent, type) {
+    if (/^(Virus|Viroid|Phytoplasma)/.test(type || '')) return [agent];
+    const [, name, note = ''] = agent.match(/^(.*?)( \(.*\))?$/);
+    const m = name.match(/^(.*?)( (?:pv\.|f\. sp\.|subsp\.) )(.*)$/);
+    return [...(m ? [italic(m[1]), m[2], italic(m[3])] : [italic(name)]), note];
   }
 
   // "Early blight", or "early blight on potato" when the other candidate is on a different plant.
@@ -862,7 +894,7 @@
     if (!leaves.length) return;
     const { ranked, all } = ranking();
     const top = ranked[0];
-    const d = describe(top.i);
+    const d = chosenPlant(describe(top.i));
     const kind = kindOf(d);
     const band = bandOf(top.p);
     let outcome = band;
@@ -932,6 +964,7 @@
     if (detailed) renderDetails(d, band);
     renderQuiz(ranked, outcome);
     renderOthers(ranked, outcome);
+    renderMore(outcome, d);
     renderLeaves();
     renderFeedbackState();
 
@@ -950,7 +983,7 @@
     }
     // The chosen plant does not match what LeafScan clearly sees.
     const seen = all[0];
-    if (plantLock && plantLock !== OTHER_PLANT && seen.p >= CONFIDENT && entries[seen.i].host !== plantLock) {
+    if (plantLock && plantLock !== OTHER_PLANT && seen.p >= CONFIDENT && !inGroup(entries[seen.i].host, plantLock)) {
       parts.push(make('p', 'quality',
         `To LeafScan this looks more like ${plantName(entries[seen.i].host).toLowerCase()} (${pct0(seen.p)}). Is the plant choice right?`));
     }
@@ -1036,6 +1069,7 @@
         'Space plants for good air flow and remove weeds and fallen leaves.',
       ]);
       el.sourcesBox.hidden = true;
+      el.phBox.hidden = true;
       return;
     }
     el.symptomsTitle.textContent = 'What it looks like';
@@ -1050,11 +1084,23 @@
     if (chem.length) {
       el.chemNote.hidden = false;
       el.chemNote.textContent = band === 'confident'
-        ? 'Before using any pesticide, check the diagnosis with an agricultural technician or a plant clinic. Use only FPA-registered products and follow the label dose and the waiting time before harvest.'
+        ? 'Before using any pesticide, check the diagnosis with an agricultural technician or a plant clinic. Use only products registered for your crop with the FPA (or with DA-BAFS for organic and biological products), and follow the label dose and the waiting time before harvest.'
         : 'Chemical options are hidden until the diagnosis is confirmed. Get a second opinion (see "Still not sure" below) before using any pesticide.';
     }
+    renderPhilippines(r, band);
     el.sourcesBox.hidden = false;
-    el.sources.replaceChildren(...r.sources.map((s) => {
+    // Philippine sources first, each listed once.
+    const seen = new Set();
+    el.sources.replaceChildren(...sourceItems([...(r.ph?.sources || []), ...r.sources].filter((s) => {
+      const key = s.url || s.title;
+      return !seen.has(key) && seen.add(key);
+    })));
+    const notes = [r.review_note, r.name_note && `Name: ${r.name_note}`, kb.note].filter(Boolean);
+    el.note.textContent = notes.join(' ');
+  }
+
+  function sourceItems(list) {
+    return list.map((s) => {
       const li = document.createElement('li');
       if (s.url) {
         const a = document.createElement('a');
@@ -1066,11 +1112,94 @@
       } else {
         li.append(s.title);
       }
+      if (s.ph) li.append(' ', make('span', 'ph-tag', 'Philippines'));
       li.append(make('div', 'src-meta', [s.publisher, s.kind, s.year, s.license].filter(Boolean).join(' · ')));
       return li;
+    });
+  }
+
+  // What Philippine sources add: local names, the Philippine situation, quarantine rules and local steps.
+  // Chemical steps follow the same rule as the main list (shown only for a confident result).
+  function renderPhilippines(r, band) {
+    const ph = r.ph;
+    el.phBox.hidden = !ph && !r.aka?.length;
+    if (el.phBox.hidden) return;
+    const local = (ph?.local || []).map((n) => `${n.name} (${n.lang})`);
+    const names = [local.length ? `Local names: ${local.join('; ')}` : null,
+      r.aka?.length ? `Also called: ${r.aka.join('; ')}` : null].filter(Boolean);
+    el.phNames.hidden = !names.length;
+    el.phNames.textContent = names.join('. ');
+    el.phRule.hidden = !ph?.regulated;
+    el.phRule.textContent = ph?.regulated || '';
+    el.phText.hidden = !ph?.text;
+    el.phText.textContent = ph?.text || '';
+    const steps = (ph?.steps || []).filter((m) => band === 'confident' || !CHEMICAL.test(m));
+    fillList(el.phSteps, steps);
+    el.phSteps.hidden = !steps.length;
+  }
+
+  // Philippine diseases of a plant that the photo model cannot recognize yet (kb.more): listed under a
+  // result for that plant, and in Plants. No chemical advice is given for them.
+  const moreFor = (host) => (kb.more || []).filter((m) => m.hosts.includes(host));
+
+  function moreItem(m) {
+    const det = document.createElement('details');
+    det.className = 'more-item';
+    const sum = document.createElement('summary');
+    sum.append(make('span', 'more-name', m.en));
+    const local = (m.local || []).map((n) => n.name).filter((n) => !m.en.toLowerCase().includes(n.toLowerCase()));
+    if (local.length) sum.append(make('span', 'more-local', local.join(' · ')));
+    if (m.regulated) sum.append(make('span', 'ph-tag rule', 'Rules apply'));
+    det.append(sum);
+    const body = make('div', 'more-body');
+    if (m.agent) {
+      const agent = make('p', 'more-agent');
+      agent.append(...agentParts(m.agent, m.type), m.type ? ` (${m.type.toLowerCase()})` : '');
+      body.append(agent);
+    }
+    if (m.regulated) body.append(make('p', 'ph-rule', m.regulated));
+    body.append(make('p', null, m.about));
+    if (m.local?.length) body.append(make('p', 'ph-names', `Local names: ${m.local.map((n) => `${n.name} (${n.lang})`).join('; ')}.`));
+    if (m.steps.length) {
+      const ul = make('ul', 'checklist');
+      fillList(ul, m.steps);
+      body.append(ul);
+    }
+    const src = make('ul', 'sources');
+    src.append(...sourceItems(m.sources));
+    body.append(make('p', 'more-src-title', 'Sources'), src);
+    det.append(body);
+    return det;
+  }
+
+  function renderMore(outcome, d) {
+    const host = plantLock && plantLock !== OTHER_PLANT ? plantLock : outcome === 'unknown' ? null : d.host;
+    const items = host ? moreFor(host) : [];
+    el.moreBox.hidden = !items.length;
+    el.moreList.replaceChildren(...items.map(moreItem));
+  }
+
+  function renderWords() {
+    el.wordsBody.replaceChildren(...(kb.words || []).map((w) => {
+      const tr = document.createElement('tr');
+      const fil = make('td', null, w.fil + (w.note ? ` (${w.note})` : ''));
+      fil.lang = 'fil';
+      const ceb = make('td', null, w.ceb || '–');
+      ceb.lang = 'ceb';
+      tr.append(make('td', null, w.en), fil, ceb);
+      return tr;
     }));
-    const notes = [r.review_note, r.name_note && `Name: ${r.name_note}`, kb.note].filter(Boolean);
-    el.note.textContent = notes.join(' ');
+    fillList(el.wordWarnings, kb.word_warnings || []);
+    const seen = new Set();
+    const used = (kb.words || []).flatMap((w) => w.sources).filter((s) => !seen.has(s.url) && seen.add(s.url));
+    el.wordsSources.replaceChildren('Sources: ', ...used.flatMap((s, n) => {
+      const a = document.createElement('a');
+      a.href = s.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = s.title;
+      return n ? ['; ', a] : [a];
+    }));
   }
 
   function renderOthers(ranked, outcome) {
@@ -1080,7 +1209,7 @@
     el.othersTitle.textContent = outcome === 'unknown' ? 'Closest matches' : 'Other possibilities';
     const list = outcome === 'unknown' ? ranked.slice(0, 3) : ranked.slice(1, 4);
     el.others.replaceChildren(...list.map(({ p, i }) => {
-      const o = describe(i);
+      const o = chosenPlant(describe(i));
       const li = document.createElement('li');
       const bar = make('div', 'o-bar');
       const fill = document.createElement('span');
@@ -1229,24 +1358,43 @@
       if (!byHost.has(e.host)) byHost.set(e.host, []);
       if (!e.healthy) byHost.get(e.host).push(describe(i).name);
     });
-    const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
+    const photoHosts = [...byHost.keys()];
     const problems = [...byHost.values()].reduce((sum, names) => sum + names.length, 0);
-    el.emptySub.textContent = `Recognizes ${problems} problems on ${hosts.length} plants. The photo never leaves your device.`;
-    el.introFacts.textContent = `${problems} problems on ${hosts.length} plants · about 7 in 10 right on test field photos · photos never leave your device`;
-    el.plantsLede.textContent = `${hosts.length} plants and ${problems} problems, plus healthy leaves of each plant. ` +
+    const more = kb.more || [];
+    for (const m of more) for (const h of m.hosts) if (!byHost.has(h)) byHost.set(h, []);
+    const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
+    el.emptySub.textContent = `Recognizes ${problems} problems on ${photoHosts.length} plants. The photo never leaves your device.`;
+    el.introFacts.textContent = `${problems} problems on ${photoHosts.length} plants · about 7 in 10 right on test field photos · photos never leave your device`;
+    el.plantsLede.textContent = `LeafScan recognizes ${problems} problems on ${photoHosts.length} plants from a photo, plus healthy leaves of each plant. ` +
+      `It also describes ${more.length} common Philippine problems it cannot recognize from photos yet, from Philippine sources. ` +
       'Scientific names are checked against the GBIF Backbone Taxonomy.';
     el.cropList.replaceChildren(...hosts.map((host) => {
       const h = kb.hosts[host] || { en: host };
       const names = byHost.get(host).sort((a, b) => a.localeCompare(b));
+      const extra = moreFor(host);
+      const local = kb.conditions.filter((c) => c.host === host)
+        .flatMap((c) => [...(c.aka || []), ...(c.ph?.local || []).map((n) => n.name)]);
       const li = document.createElement('li');
-      li.dataset.search = [h.en, h.fil, h.scientific, ...names].filter(Boolean).join(' ').toLowerCase();
+      li.dataset.search = [h.en, h.fil, h.scientific, ...(h.search || []), ...names, ...local,
+        ...extra.flatMap((m) => [m.en, ...(m.local || []).map((n) => n.name)])].filter(Boolean).join(' ').toLowerCase();
       const head = make('div', 'pr-head');
       head.append(make('span', 'pr-name', h.en));
       if (h.fil) head.append(make('span', 'pr-fil', h.fil));
-      head.append(make('span', 'pr-n', names.length ? `${names.length} ${names.length === 1 ? 'problem' : 'problems'}` : 'healthy leaves only'));
+      head.append(make('span', 'pr-n', h.photo === false ? 'not in the photo model'
+        : names.length ? `${names.length} ${names.length === 1 ? 'problem' : 'problems'}` : 'healthy leaves only'));
       const sci = make('p', 'pr-sci');
       if (h.scientific) sci.append(italic(h.scientific), h.rank === 'genus' ? ' spp.' : '');
-      li.append(head, sci, make('p', 'pr-list', names.join(' · ')));
+      li.append(head, sci);
+      if (names.length) li.append(make('p', 'pr-list', names.join(' · ')));
+      if (extra.length) {
+        const det = document.createElement('details');
+        det.className = 'pr-more';
+        const sum = document.createElement('summary');
+        sum.append(make('span', 'pr-more-label', h.photo === false ? 'Philippine problems (not recognized from photos): '
+          : 'Also in the Philippines, not recognized from photos: '), extra.map((m) => m.en).join(' · '));
+        det.append(sum, ...extra.map(moreItem));
+        li.append(det);
+      }
       return li;
     }));
   }

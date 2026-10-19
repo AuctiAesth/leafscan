@@ -20,6 +20,13 @@ scientific names of the plant and the cause.
 - Says "Not recognized" instead of guessing when the photo may not be a leaf or a plant it knows.
 - Study mode (for the research team) logs each photo with the study's photo-log fields and exports a ZIP with
   the photos and `photo_log.csv`; nothing leaves the phone until you export it.
+- **Philippine information:** results add Philippine notes, local names (for example PhilRice's regional rice
+  disease names), Philippine steps and quarantine rules, from PhilRice, DA regional offices, ATI, BPI, PCA,
+  DOST-PCAARRD and UPLB. The Plants list and results also describe 17 common Philippine problems LeafScan cannot
+  recognize from photos yet (such as bacterial wilt, rice tungro and bacterial leaf blight, corn downy mildew,
+  banana bugtok and bract mosaic, kamote kulot and coconut cadang-cadang), and the Guide lists Philippine rules
+  for treating plants and the Filipino and Cebuano words extension guides use for symptoms.
+- Choosing Squash (kalabasa) also considers the zucchini classes (same genus), so squash viruses can be named.
 - Warns about blurry or dark photos, and can combine up to 3 leaves of the same plant into one result.
 - When a photo is uncertain, it asks up to 4 yes/no questions about visible symptoms, one at a time, and
   hides chemical treatments until the diagnosis is confident.
@@ -29,8 +36,10 @@ scientific names of the plant and the cause.
 
 This is a student research prototype. Results can be wrong. Confirm any diagnosis with an agricultural
 technician or a plant clinic (for example the UPLB Pest Clinic, which accepts samples by courier, or a DA
-Regional Crop Protection Center) before spraying or removing plants, and use only pesticides registered with
-the Fertilizer and Pesticide Authority, following the label.
+Regional Crop Protection Center; BPI's Crop Pest Management Division diagnoses samples free of charge) before
+spraying or removing plants. Use only products registered with the Fertilizer and Pesticide Authority, or with
+DA-BAFS for organic and biological products, following the label, and do not burn sick plants in the open
+(RA 9003).
 
 ## How it works
 
