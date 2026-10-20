@@ -1,5 +1,9 @@
 # LeafScan
 
+> **© 2026 the LeafScan student research team. All rights reserved.** This repository is public so the app
+> can be used, but it is not open source: please do not copy, republish or present LeafScan as your own work.
+> See [LICENSE.md](LICENSE.md) for what is allowed and for the parts under other licences.
+
 **Open the app:** https://auctiaesth.github.io/leafscan/
 
 LeafScan identifies plant diseases from a photo of a leaf. It recognizes 120 diseases on 34 plants, plus
@@ -55,7 +59,9 @@ steps and the expert sources they were summarized from.
 
 ## Credits and licenses
 
-Non-commercial use only, because of the licenses of the data and knowledge sources below.
+The app itself is © 2026 the LeafScan student research team, all rights reserved (see [LICENSE.md](LICENSE.md)).
+The data and knowledge sources below keep their own licenses; because of them, any permitted use is
+non-commercial only.
 
 - **Training data:** PlantVillage (Hughes & Salathé, 2015); PlantSeg, CC BY 4.0, and PlantWild, CC BY-NC-ND 4.0
   (Wei et al., 2024); PlantDoc, CC BY 4.0 (Singh et al., 2020), used for testing only; for the v3 model, 3,223
