@@ -522,6 +522,12 @@
   "healthy": false
  },
  {
+  "id": "other/plant",
+  "plant": "other",
+  "condition": "plant",
+  "healthy": false
+ },
+ {
   "id": "peach/anthracnose",
   "plant": "peach",
   "condition": "anthracnose",
@@ -664,6 +670,12 @@
   "plant": "rice",
   "condition": "sheath-blight",
   "healthy": false
+ },
+ {
+  "id": "snake_plant/healthy",
+  "plant": "snake_plant",
+  "condition": "healthy",
+  "healthy": true
  },
  {
   "id": "soybean/bacterial-blight",

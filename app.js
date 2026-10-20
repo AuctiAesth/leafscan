@@ -5,6 +5,7 @@
  *            the user can move and zoom the photo underneath the frame)
  *         -> 224x224 RGB, scaled to 0..1, CHW float32
  *         -> MobileNetV3-Large (normalization + softmax are inside the model)
+ *            (and two more views: the square mirrored and the whole photo; the three answers are averaged)
  *         -> class probabilities (averaged over leaves when the user adds more than one),
  *            mapped to records in the expert knowledge base (data/kb.json)
  *
@@ -22,22 +23,24 @@
   const RESIZE = 256;
   const CONFIDENT = 0.70;   // at or above: show result normally
   const UNSURE = 0.45;      // below: say we are not sure
-  // Cut-offs are chosen on the 2,209 validation field photos; every rate is reported on the 3,100 test field
-  // photos (public datasets, not Philippine farms), neither used in training. training/calibrate_app.py ->
-  // results/app_calibration.json, for the app's model v2-int8 (the paper's v1-study figures are in results/v1-study).
-  // Out of 10 answers in each band, how many were right: 92.3% [90.9-93.6], 70.2% [66.6-73.5], 40.1% [37.0-43.3].
+  // Cut-offs are chosen on the 2,692 validation field photos; every rate is reported on the 3,583 test field
+  // photos (public datasets and GBIF snake plant / other-plant photos, not Philippine farms), neither used in
+  // training, with the app's three views and squash-family answer. training/calibrate_app.py ->
+  // results/app_calibration.json, for the app's model v3-int8 (the paper's v1-study figures are in results/v1-study).
+  // Out of 10 answers in each band, how many were right (rounded down): 96.0% [95.0-96.8], 77.4% [74.4-80.2],
+  // 44.4% [41.3-47.5].
   const RIGHT_IN_10 = { confident: 9, moderate: 7, unsure: 4 };
-  // The same when the user chooses the plant and only that plant's problems are ranked: 94.1%, 58.7%, 29.6%.
-  // Choosing the plant raises overall accuracy on these photos from 71.9% to 87.7%.
-  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 3 };
-  // Below this top probability the guess was right only 28.9% of the time (about 3 in 10), and the plant 41.1%.
-  const NOT_RECOGNIZED = 0.25;
+  // The same when the user chooses the plant and only that plant's problems are ranked: 96.4%, 60.5%, 41.9%.
+  // Choosing the plant raises overall accuracy on these photos from 77.5% to 90.7%.
+  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 4 };
+  // Below this top probability the guess was right only 33.1% of the time (about 3 in 10), and the plant 45.1%.
+  const NOT_RECOGNIZED = 0.30;
   const OTHER_PLANT = 'other';
   const MAX_QUESTIONS = 4;
-  // Photo checks on the 224x224 crop. Blur: at least 95% of artificially blurred crops score below 18, and
+  // Photo checks on the 224x224 crop. Blur: at least 95% of artificially blurred crops score below 20, and
   // only 2% of real ones. Darkness barely hurts this model, so it warns only on very dark crops, where a
   // person could not check the spots either.
-  const BLURRY = 18;
+  const BLURRY = 20;
   const DARK = 30;
   const ZOOM_STEP = 1.25;
   const MAX_LEAVES = 3;
@@ -646,24 +649,38 @@
   // ---------- Preprocessing ----------
 
   // Downscale in halving steps so large phone photos are smoothed like PIL's antialiased resize.
-  function cropTo224(v) {
-    const r = cropRect(v);
-    let src = source.image, sx = r.x, sy = r.y, side = r.side;
-    while (side > SIZE * 2) {
-      const half = Math.round(side / 2);
+  function scaleTo224(sx, sy, sw, sh, mirror = false) {
+    let src = source.image;
+    while (sw > SIZE * 2 || sh > SIZE * 2) {
+      const w = Math.max(SIZE, Math.round(sw / 2)), h = Math.max(SIZE, Math.round(sh / 2));
       const step = document.createElement('canvas');
-      step.width = step.height = half;
+      step.width = w; step.height = h;
       const sctx = step.getContext('2d');
       sctx.imageSmoothingQuality = 'high';
-      sctx.drawImage(src, sx, sy, side, side, 0, 0, half, half);
-      src = step; sx = 0; sy = 0; side = half;
+      sctx.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+      src = step; sx = 0; sy = 0; sw = w; sh = h;
     }
     const out = document.createElement('canvas');
     out.width = out.height = SIZE;
     const ctx = out.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(src, sx, sy, side, side, 0, 0, SIZE, SIZE);
+    if (mirror) { ctx.translate(SIZE, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, SIZE, SIZE);
     return out;
+  }
+
+  function cropTo224(v, mirror = false) {
+    const r = cropRect(v);
+    return scaleTo224(r.x, r.y, r.side, r.side, mirror);
+  }
+
+  // Each check looks at the photo three ways and averages the answers: the square, the square mirrored, and
+  // the whole photo. On 3,100 test field photos (v2 model) this raised accuracy from 71.9% to 73.4%, and high-confidence
+  // answers were right 94.7% instead of 92.4% of the time (training/multi_view.py, results/multi_view_test.json).
+  // A phone cannot give a web app a true 3D scan, and disease spots are surface patterns, so more views of
+  // the photo (and up to 3 leaves) are what make the answer sturdier.
+  function views(v, square) {
+    return [square, cropTo224(v, true), scaleTo224(0, 0, source.w, source.h)];
   }
 
   function toCHW(canvas) {
@@ -718,7 +735,14 @@
     try {
       const canvas = cropTo224(v);
       const quality = checkQuality(canvas);
-      const { probs, ms } = await runner.run(toCHW(canvas));
+      let probs = null, ms = 0;
+      for (const view of views(v, canvas)) {
+        const r = await runner.run(toCHW(view));
+        ms += r.ms;
+        if (!probs) probs = Float32Array.from(r.probs);
+        else r.probs.forEach((x, i) => { probs[i] += x; });
+      }
+      probs = probs.map((x) => x / 3);
       if (!source || source.id !== v.id) return; // a new photo replaced this one meanwhile
       lastMs = ms;
       const leaf = leaves.find((l) => l.id === v.id);
@@ -763,7 +787,7 @@
   // class of the same name (zucchini powdery mildew is squash powdery mildew when squash is chosen).
   function ranking() {
     const all = rank(combine());
-    if (!plantLock || plantLock === OTHER_PLANT) return { ranked: all, all };
+    if (!plantLock || plantLock === OTHER_PLANT) return { ranked: familyMerge(all), all };
     const mine = new Map();
     for (const { p, i } of all) {
       if (!inGroup(entries[i].host, plantLock)) continue;
@@ -772,6 +796,35 @@
     }
     const total = [...mine.values()].reduce((sum, p) => sum + p, 0) || 1;
     return { ranked: [...mine].map(([i, p]) => ({ p: p / total, i })).sort((a, b) => b.p - a.p), all };
+  }
+
+  // Cucumber, squash and zucchini leaves look alike: the model often names the wrong one but the right
+  // disease. With no plant chosen, each disease's scores are added across the three and the answer is given
+  // for the squash family. On 301 test field photos of these plants this raised right answers from 62% to
+  // 79% (training/family_answer.py, results/family_answer.json). The first (highest) member class stands
+  // for the family answer.
+  const FAMILY = ['cucumber', 'squash', 'zucchini'];
+  // The model's "other plant" class: ornamentals and garden plants it was taught to set aside.
+  const OTHER_HOST = 'other';
+
+  function familyMerge(list) {
+    const out = [];
+    const fam = new Map();
+    for (const x of list) {
+      if (!FAMILY.includes(entries[x.i].host)) { out.push(x); continue; }
+      const slug = keyOf(x.i).split('/')[1];
+      const f = fam.get(slug);
+      if (f) f.p += x.p;
+      else { const n = { p: x.p, i: x.i, family: true }; fam.set(slug, n); out.push(n); }
+    }
+    return out.sort((a, b) => b.p - a.p);
+  }
+
+  // How a ranked item is shown: the family answer, or the plant the user chose, or the class itself.
+  function present(x) {
+    const d = chosenPlant(describe(x.i));
+    if (!x.family) return d;
+    return { ...d, family: true, plant: 'Squash family', plantFil: 'pipino, kalabasa', hostSci: 'Cucurbitaceae', hostRank: 'family' };
   }
 
   // A zucchini class can be the answer when squash was chosen: name the plant the user chose.
@@ -894,14 +947,15 @@
     if (!leaves.length) return;
     const { ranked, all } = ranking();
     const top = ranked[0];
-    const d = chosenPlant(describe(top.i));
+    const d = present(top);
     const kind = kindOf(d);
     const band = bandOf(top.p);
     let outcome = band;
     if (plantLock === OTHER_PLANT) outcome = 'uncovered';
+    else if (!plantLock && entries[top.i].host === OTHER_HOST && top.p >= NOT_RECOGNIZED) outcome = 'other';
     else if (plantLock && !hostHasProblems(plantLock)) outcome = 'healthy-only';
     else if (!plantLock && top.p < NOT_RECOGNIZED) outcome = 'unknown';
-    const special = outcome === 'uncovered' || outcome === 'healthy-only';
+    const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
     const doubtful = special || outcome === 'unsure' || outcome === 'unknown';
     current = { ranked, all, top, d, band, outcome };
 
@@ -911,12 +965,16 @@
     el.chip.className = `chip ${doubtful ? 'unsure' : kind}`;
     el.summaryCard.dataset.kind = doubtful ? 'unsure' : kind;
     el.chip.textContent = {
-      uncovered: 'Not covered', 'healthy-only': 'Not covered', unknown: 'Not recognized', unsure: 'Not sure',
+      uncovered: 'Not covered', 'healthy-only': 'Not covered', other: 'Not covered', unknown: 'Not recognized', unsure: 'Not sure',
     }[outcome] || CHIP[band][kind];
 
     const plantLabel = d.plantFil ? `${d.plant} · ${d.plantFil}` : d.plant;
     if (outcome === 'uncovered') {
       el.plant.textContent = 'Your plant is not in LeafScan\'s list';
+      el.name.textContent = 'LeafScan cannot check this plant';
+      el.sci.replaceChildren();
+    } else if (outcome === 'other') {
+      el.plant.textContent = 'Not one of LeafScan\'s plants';
       el.name.textContent = 'LeafScan cannot check this plant';
       el.sci.replaceChildren();
     } else if (outcome === 'healthy-only') {
@@ -948,14 +1006,14 @@
     if (shown && !special) {
       if (shown.i !== top.i) {
         el.delta.classList.add('changed');
-        el.delta.textContent = `was ${shortName(describe(shown.i))} ${pct0(shown.p)}`;
+        el.delta.textContent = `was ${shortName(present(shown))} ${pct0(shown.p)}`;
       } else {
         const diff = Math.round(top.p * 100) - Math.round(shown.p * 100);
         el.delta.textContent = diff === 0 ? 'no change' : `${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} since last check`;
         if (diff) el.delta.classList.add(diff > 0 ? 'up' : 'down');
       }
     }
-    if (!special) shown = { i: top.i, p: top.p };
+    if (!special) shown = { i: top.i, p: top.p, family: top.family };
 
     renderMessage(outcome, d, ranked, all);
     const detailed = outcome === 'confident' || outcome === 'moderate';
@@ -987,10 +1045,17 @@
       parts.push(make('p', 'quality',
         `To LeafScan this looks more like ${plantName(entries[seen.i].host).toLowerCase()} (${pct0(seen.p)}). Is the plant choice right?`));
     }
+    if (d.family && outcome !== 'unknown') {
+      parts.push(make('p', 'quality',
+        'Cucumber, squash and zucchini leaves look alike, so LeafScan names the problem for the whole squash family. Choose your plant above to narrow it down.'));
+    }
     const rate = plantLock ? RIGHT_IN_10_PLANT : RIGHT_IN_10;
     const among = plantLock ? ` among ${d.plant.toLowerCase()} problems` : '';
     let text;
-    if (outcome === 'uncovered') {
+    if (outcome === 'other') {
+      text = `This looks like a plant LeafScan cannot check, such as an ornamental or garden plant outside its list (${pct0(ranked[0].p)}). ` +
+        'If it is one of LeafScan\'s plants, choose it above. Otherwise ask a plant clinic or an agriculture teacher (see "Still not sure" below).';
+    } else if (outcome === 'uncovered') {
       text = 'LeafScan knows only the plants under "Supported plants". For this plant, ask a plant clinic or an agriculture teacher (see "Still not sure" below).';
     } else if (outcome === 'healthy-only') {
       text = `LeafScan has learned only healthy ${d.plant.toLowerCase()} leaves, so it cannot check them for diseases. Ask a plant clinic or an agriculture teacher (see "Still not sure" below).`;
@@ -1001,7 +1066,7 @@
         ? 'No disease seen in this photo. Early signs can be missed, so check the plant again in 3 to 5 days.'
         : `On test photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`;
     } else if (outcome === 'moderate') {
-      const alt = ranked[1] ? describe(ranked[1].i) : null;
+      const alt = ranked[1] ? present(ranked[1]) : null;
       text = `Results this sure${among} were right about ${rate.moderate} in 10 times.` +
         (alt ? ` It could also be ${shortName(alt, d)}.` : '') +
         (plantLock ? ' Answer the questions below, or add another leaf.'
@@ -1020,7 +1085,7 @@
   function renderPlantSelect() {
     const sel = el.plantSelect;
     if (!sel.options.length) {
-      const hosts = [...new Set(entries.map((e) => e.host).filter(Boolean))]
+      const hosts = [...new Set(entries.map((e) => e.host).filter((h) => h && h !== OTHER_HOST))]
         .sort((a, b) => plantName(a).localeCompare(plantName(b)));
       const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
       const placeholder = opt('', 'Wrong plant?');
@@ -1058,8 +1123,9 @@
     el.chemNote.hidden = true;
     if (d.healthy || !r) {
       el.symptomsTitle.textContent = 'What this means';
+      const note = d.healthy ? kb.hosts[d.host]?.note : null;
       el.symptoms.textContent = d.healthy
-        ? `No disease was seen on this ${d.plant.toLowerCase()} leaf. Early signs can be missed, so keep checking.`
+        ? `No disease was seen on this ${d.plant.toLowerCase()} leaf. Early signs can be missed, so keep checking.${note ? ` ${note.text}` : ''}`
         : 'Details for this result are not in the knowledge base yet.';
       el.lookTitle.hidden = el.look.hidden = true;
       el.manageTitle.textContent = 'Keep it healthy';
@@ -1068,7 +1134,8 @@
         'Water at the base of the plant in the morning so leaves stay dry.',
         'Space plants for good air flow and remove weeds and fallen leaves.',
       ]);
-      el.sourcesBox.hidden = true;
+      el.sourcesBox.hidden = !note;
+      if (note) el.sources.replaceChildren(...sourceItems(note.sources));
       el.phBox.hidden = true;
       return;
     }
@@ -1174,7 +1241,8 @@
 
   function renderMore(outcome, d) {
     const host = plantLock && plantLock !== OTHER_PLANT ? plantLock : outcome === 'unknown' ? null : d.host;
-    const items = host ? moreFor(host) : [];
+    const hosts = d.family && !plantLock ? FAMILY : host ? [host] : [];
+    const items = (kb.more || []).filter((m) => m.hosts.some((h) => hosts.includes(h)));
     el.moreBox.hidden = !items.length;
     el.moreList.replaceChildren(...items.map(moreItem));
   }
@@ -1203,13 +1271,14 @@
   }
 
   function renderOthers(ranked, outcome) {
-    const special = outcome === 'uncovered' || outcome === 'healthy-only';
+    const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
     el.othersTitle.hidden = el.others.hidden = special;
     if (special) return;
     el.othersTitle.textContent = outcome === 'unknown' ? 'Closest matches' : 'Other possibilities';
     const list = outcome === 'unknown' ? ranked.slice(0, 3) : ranked.slice(1, 4);
-    el.others.replaceChildren(...list.map(({ p, i }) => {
-      const o = chosenPlant(describe(i));
+    el.others.replaceChildren(...list.map((x) => {
+      const { p } = x;
+      const o = present(x);
       const li = document.createElement('li');
       const bar = make('div', 'o-bar');
       const fill = document.createElement('span');
@@ -1260,7 +1329,7 @@
   function renderQuiz(ranked, outcome) {
     // The pool keeps every likely candidate, including "healthy" (which has no questions), so that
     // answering "no" to all disease signs can still lead to a healthy result.
-    const pool = ranked.slice(0, 3).filter(({ p }) => p >= 0.08).map(({ p, i }) => ({ p, i, d: describe(i) }));
+    const pool = ranked.slice(0, 3).filter(({ p }) => p >= 0.08).map((x) => ({ p: x.p, i: x.i, d: present(x) }));
     const cands = pool.filter((c) => c.d.record?.look_for?.length);
     if ((outcome !== 'moderate' && outcome !== 'unsure') || pool.length < 2 || !cands.length) {
       el.confirmBox.hidden = true;
@@ -1354,7 +1423,7 @@
   function renderCrops() {
     const byHost = new Map();
     entries.forEach((e, i) => {
-      if (!e.host) return;
+      if (!e.host || e.host === OTHER_HOST) return;
       if (!byHost.has(e.host)) byHost.set(e.host, []);
       if (!e.healthy) byHost.get(e.host).push(describe(i).name);
     });
@@ -1364,7 +1433,7 @@
     for (const m of more) for (const h of m.hosts) if (!byHost.has(h)) byHost.set(h, []);
     const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
     el.emptySub.textContent = `Recognizes ${problems} problems on ${photoHosts.length} plants. The photo never leaves your device.`;
-    el.introFacts.textContent = `${problems} problems on ${photoHosts.length} plants · about 7 in 10 right on test field photos · photos never leave your device`;
+    el.introFacts.textContent = `${problems} problems on ${photoHosts.length} plants · about 3 in 4 right on test field photos · photos never leave your device`;
     el.plantsLede.textContent = `LeafScan recognizes ${problems} problems on ${photoHosts.length} plants from a photo, plus healthy leaves of each plant. ` +
       `It also describes ${more.length} common Philippine problems it cannot recognize from photos yet, from Philippine sources. ` +
       'Scientific names are checked against the GBIF Backbone Taxonomy.';
@@ -1386,6 +1455,7 @@
       if (h.scientific) sci.append(italic(h.scientific), h.rank === 'genus' ? ' spp.' : '');
       li.append(head, sci);
       if (names.length) li.append(make('p', 'pr-list', names.join(' · ')));
+      if (h.note) li.append(make('p', 'pr-note', h.note.text));
       if (extra.length) {
         const det = document.createElement('details');
         det.className = 'pr-more';
@@ -1495,7 +1565,7 @@
       const img = document.createElement('img');
       img.src = h.img; img.alt = ''; img.width = 44; img.height = 44;
       const text = make('div', 'h-text');
-      const special = h.band === 'uncovered' || h.band === 'healthy-only';
+      const special = h.band === 'uncovered' || h.band === 'healthy-only' || h.band === 'other';
       text.append(
         make('div', 'h-name', name),
         make('div', 'h-meta', [special ? null : pct(h.p), h.n > 1 ? `${h.n} leaves` : null,
@@ -1588,11 +1658,12 @@
   function techContent() {
     const c = current;
     const d = c.d;
-    const special = c.outcome === 'uncovered' || c.outcome === 'healthy-only';
+    const special = c.outcome === 'uncovered' || c.outcome === 'healthy-only' || c.outcome === 'other';
     const facts = [];
     const add = (label, value) => facts.push([label, value]);
     const hostSci = d.hostSci ? ` (${d.hostSci}${d.hostRank === 'genus' ? ' spp.' : ''})` : '';
     add('Plant', c.outcome === 'uncovered' ? 'Not in LeafScan\'s list (chosen by the user)'
+      : c.outcome === 'other' ? 'Not one of LeafScan\'s plants (guessed by LeafScan)'
       : `${d.plant}${hostSci}, ${plantLock ? 'chosen by the user' : 'guessed by LeafScan'}`);
     if (special) {
       add('LeafScan result', 'None: LeafScan does not cover diseases of this plant');
@@ -1601,8 +1672,9 @@
         : (d.healthy ? 'Healthy' : d.name);
       const word = c.outcome === 'unknown' ? 'very low confidence' : CONF_WORD[c.band].toLowerCase();
       add('LeafScan result', `${name}${d.record?.agent ? ` (${d.record.agent})` : ''}, ${pct0(c.top.p)}, ${word}`);
-      const others = c.ranked.slice(1, 4).filter(({ p }) => p >= 0.01).map(({ p, i }) => {
-        const o = describe(i);
+      const others = c.ranked.slice(1, 4).filter(({ p }) => p >= 0.01).map((x) => {
+        const { p } = x;
+        const o = present(x);
         return `${o.plant}: ${o.healthy ? 'healthy' : o.name.toLowerCase()} ${pct(p)}`;
       });
       if (others.length) add('Other possibilities', others);
@@ -1615,7 +1687,7 @@
     add('Photo check', leaves.map((l, n) => `Leaf ${n + 1}: ${l.quality.blurry ? 'blurry' : l.quality.dark ? 'too dark' : 'sharp, good light'}`));
     add('How it was checked', `${leaves.length} leaf photo${leaves.length > 1 ? 's' : ''} checked on the user's device` +
       `${lastMs != null ? ` in ${Math.round(lastMs)} ms` : ''} by LeafScan, a student prototype (MobileNetV3 model, ` +
-      'about 72% right on 3,100 test field photos from public datasets, not yet Philippine photos).');
+      'about 77% right on 3,583 test field photos from public datasets, not yet Philippine photos).');
     const fb = readFeedback().find((x) => x.sid === plantId);
     if (fb) add('User\'s feedback', FB_LABEL[fb.a]);
     const date = new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
@@ -1928,7 +2000,7 @@
     el.actions.hidden = !on && !!source;
     if (on) {
       el.addText.replaceChildren(make('b', null, `Leaf ${leaves.length + 1} of up to ${MAX_LEAVES}:`),
-        ' take or choose a photo of another leaf from the same plant. The results are combined.');
+        ' another sick leaf from the same plant, top side up (LeafScan learned mostly from the top side). The results are combined.');
     }
   }
 

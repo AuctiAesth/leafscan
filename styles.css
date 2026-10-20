@@ -579,6 +579,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 .pr-sci { margin: 2px 0 0; font-size: .88rem; color: var(--muted); }
 .pr-sci i { color: var(--ink); }
 .pr-list { margin: 6px 0 0; font-size: .86rem; color: var(--muted); line-height: 1.5; }
+.pr-note { margin: 6px 0 0; font-size: .86rem; line-height: 1.5; padding-left: 10px; border-left: 2px solid var(--gold); }
 
 /* ---------- Guide ---------- */
 
