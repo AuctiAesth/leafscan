@@ -1,8 +1,8 @@
 # LeafScan
 
-> **© 2026 the LeafScan student research team. All rights reserved.** This repository is public so the app
-> can be used, but it is not open source: please do not copy, republish or present LeafScan as your own work.
-> See [LICENSE.md](LICENSE.md) for what is allowed and for the parts under other licences.
+> **© 2026 the LeafScan student research team.** This repository is public so the app can be used, but it is
+> not open source: please do not copy, republish or present LeafScan as your own work. See [LICENSE.md](LICENSE.md)
+> for what is allowed, and for the licences of the training data, the model and the other parts.
 
 **Open the app:** https://auctiaesth.github.io/leafscan/
 
@@ -59,14 +59,18 @@ steps and the expert sources they were summarized from.
 
 ## Credits and licenses
 
-The app itself is © 2026 the LeafScan student research team, all rights reserved (see [LICENSE.md](LICENSE.md)).
-The data and knowledge sources below keep their own licenses; because of them, any permitted use is
-non-commercial only.
+The app's code, design and the team's own texts are © 2026 the LeafScan student research team (see
+[LICENSE.md](LICENSE.md)). The model was trained on the data below and the team claims no rights over it beyond
+what those licenses allow. The data and knowledge sources keep their own licenses; because of them, any permitted
+use is non-commercial only.
 
-- **Training data:** PlantVillage (Hughes & Salathé, 2015); PlantSeg, CC BY 4.0, and PlantWild, CC BY-NC-ND 4.0
-  (Wei et al., 2024); PlantDoc, CC BY 4.0 (Singh et al., 2020), used for testing only; for the v3 model, 3,223
+- **Training data:** PlantVillage, CC BY-SA 3.0 (Hughes & Salathé, 2015); PlantSeg, CC BY 4.0, and PlantWild,
+  CC BY-NC-ND 4.0 (Wei et al., 2024); PlantDoc, CC BY 4.0 (Singh et al., 2020), used for testing only; for the v3 model, 3,223
   snake plant and ornamental-plant photos from GBIF.org (mostly iNaturalist observers) under CC0, CC BY 4.0 or
-  CC BY-NC 4.0, credited individually in `credits/gbif_photos.csv`. No dataset images are included here.
+  CC BY-NC 4.0, credited individually in `credits/gbif_photos.csv`. No dataset images are included here. The
+  photos in PlantSeg and PlantWild were collected from websites, and their original photographers keep their
+  rights. None of PlantSeg's photos comes from a Philippine website, which is why the study tests LeafScan on
+  Philippine plants in the field.
 - **Knowledge base:** summaries written from the PlantVillage disease library (Penn State University), CABI
   Plant Health Knowledge for AI / PlantwisePlus Pest Management Decision Guides (CC BY-NC-SA 4.0), and
   university extension and government fact sheets. Every record cites and links its sources. The summaries
