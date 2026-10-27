@@ -735,3 +735,14 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 .study-list .s-title { font-weight: 600; overflow-wrap: anywhere; }
 .study-list .s-meta { font-size: .8rem; color: var(--muted); }
 .study-list .s-confirm { grid-column: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+
+/* Diseased spots (lesion highlight) */
+.spots { margin: 12px 0 4px; }
+.spots-fig { margin: 10px 0 0; }
+.spots-fig canvas {
+  display: block; width: 100%; max-width: 320px; aspect-ratio: 1; height: auto;
+  border: 1px solid var(--rule-strong); border-radius: 6px; cursor: pointer; touch-action: manipulation;
+}
+.spots-fig figcaption { margin-top: 6px; font-size: 0.95rem; color: var(--ink); }
+.spots-note { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); max-width: 60ch; }
+.spots-note:empty { display: none; }

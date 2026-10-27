@@ -65,6 +65,8 @@
     conf: $('resultConf'), confWord: $('confWord'), delta: $('resultDelta'), message: $('resultMessage'),
     staleBar: $('staleBar'), checkBtn: $('checkBtn'), leafStrip: $('leafStrip'), addLeafBtn: $('addLeafBtn'),
     techBtn: $('techBtn'), autoCheck: $('autoCheck'),
+    spotsBox: $('spotsBox'), spotsBtn: $('spotsBtn'), spotsFig: $('spotsFig'), spotsCanvas: $('spotsCanvas'),
+    spotsText: $('spotsText'), spotsNote: $('spotsNote'),
     detailsCard: $('detailsCard'), details: $('resultDetails'), symptomsTitle: $('symptomsTitle'), symptoms: $('resultSymptoms'),
     lookTitle: $('lookTitle'), look: $('resultLook'), manageTitle: $('manageTitle'), manage: $('resultManage'),
     chemNote: $('chemNote'), sourcesBox: $('sourcesBox'), sources: $('resultSources'), note: $('resultNote'),
@@ -193,8 +195,8 @@
     return { wasm, cached: !!cache };
   }
 
-  async function loadModelBytes(info, onProgress) {
-    const cacheName = MODEL_CACHE_PREFIX + info.version;
+  async function loadModelBytes(info, onProgress, prefix = MODEL_CACHE_PREFIX) {
+    const cacheName = prefix + info.version;
     let cache = null;
     try { if (self.caches) cache = await caches.open(cacheName); } catch { cache = null; }
     const bytes = new Uint8Array(info.bytes);
@@ -221,7 +223,7 @@
     // Parts of older model versions are no longer needed.
     if (self.caches) {
       for (const key of await caches.keys()) {
-        if (key.startsWith(MODEL_CACHE_PREFIX) && key !== cacheName) caches.delete(key);
+        if (key.startsWith(prefix) && key !== cacheName) caches.delete(key);
       }
     }
     return { bytes, cached: !!cache };
@@ -300,6 +302,11 @@
       try { worker = new Worker('worker.js'); } catch (err) { reject(err); return; }
       const pending = new Map();
       let seq = 0;
+      const ask = (msg, transfer) => new Promise((res, rej) => {
+        const id = ++seq;
+        pending.set(id, { res, rej });
+        worker.postMessage({ ...msg, id }, transfer);
+      });
       const fail = (err) => { clearTimeout(timer); worker.terminate(); reject(err); };
       const timer = setTimeout(() => fail(new Error('the model worker did not start in time')), 90000);
       worker.onerror = (e) => { e.preventDefault(); fail(new Error(e.message || 'model worker error')); };
@@ -310,13 +317,9 @@
           worker.onerror = (ev) => console.error('Model worker error', ev.message);
           resolve({
             where: 'worker',
-            run(data) {
-              return new Promise((res, rej) => {
-                const id = ++seq;
-                pending.set(id, { res, rej });
-                worker.postMessage({ type: 'run', id, data }, [data.buffer]);
-              });
-            },
+            run(data) { return ask({ type: 'run', data }, [data.buffer]); },
+            lesionLoad(bytes) { return ask({ type: 'lesion-load', bytes }, [bytes.buffer]); },
+            lesionRun(data, size) { return ask({ type: 'lesion-run', data, size }, [data.buffer]); },
           });
         } else if (msg.type === 'failed') {
           fail(new Error(msg.message));
@@ -325,7 +328,8 @@
           pending.delete(msg.id);
           if (!p) return;
           if (msg.type === 'result') p.res({ probs: msg.probs, ms: msg.ms });
-          else p.rej(new Error(msg.message));
+          else if (msg.type === 'error') p.rej(new Error(msg.message));
+          else p.res(msg); // lesion-ready, or a lesion map { mask, ms }
         }
       };
       // Transferred (not copied) when the parts are cached, so the model sits in memory only once.
@@ -341,12 +345,21 @@
     });
     const tensor = (data) => new ort.Tensor('float32', data, [1, 3, SIZE, SIZE]);
     await session.run({ image: tensor(new Float32Array(3 * SIZE * SIZE)) }); // warm-up
+    let lesion = null;
     return {
       where: 'page',
       async run(data) {
         const t0 = performance.now();
         const out = await session.run({ image: tensor(data) });
         return { probs: Float32Array.from(out.probabilities.data), ms: performance.now() - t0 };
+      },
+      async lesionLoad(bytes) {
+        lesion = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      },
+      async lesionRun(data, size) {
+        const t0 = performance.now();
+        const out = await lesion.run({ image: new ort.Tensor('float32', data, [1, 3, size, size]) });
+        return { mask: Float32Array.from(out.lesion.data), ms: performance.now() - t0 };
       },
     };
   }
@@ -649,10 +662,10 @@
   // ---------- Preprocessing ----------
 
   // Downscale in halving steps so large phone photos are smoothed like PIL's antialiased resize.
-  function scaleTo224(sx, sy, sw, sh, mirror = false) {
+  function scaleTo224(sx, sy, sw, sh, mirror = false, size = SIZE) {
     let src = source.image;
-    while (sw > SIZE * 2 || sh > SIZE * 2) {
-      const w = Math.max(SIZE, Math.round(sw / 2)), h = Math.max(SIZE, Math.round(sh / 2));
+    while (sw > size * 2 || sh > size * 2) {
+      const w = Math.max(size, Math.round(sw / 2)), h = Math.max(size, Math.round(sh / 2));
       const step = document.createElement('canvas');
       step.width = w; step.height = h;
       const sctx = step.getContext('2d');
@@ -661,11 +674,11 @@
       src = step; sx = 0; sy = 0; sw = w; sh = h;
     }
     const out = document.createElement('canvas');
-    out.width = out.height = SIZE;
+    out.width = out.height = size;
     const ctx = out.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingQuality = 'high';
-    if (mirror) { ctx.translate(SIZE, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, SIZE, SIZE);
+    if (mirror) { ctx.translate(size, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, size, size);
     return out;
   }
 
@@ -683,9 +696,9 @@
     return [square, cropTo224(v, true), scaleTo224(0, 0, source.w, source.h)];
   }
 
-  function toCHW(canvas) {
-    const { data } = canvas.getContext('2d').getImageData(0, 0, SIZE, SIZE);
-    const plane = SIZE * SIZE;
+  function toCHW(canvas, size = SIZE) {
+    const { data } = canvas.getContext('2d').getImageData(0, 0, size, size);
+    const plane = size * size;
     const chw = new Float32Array(3 * plane);
     for (let i = 0, p = 0; p < plane; i += 4, p++) {
       chw[p] = data[i] / 255;
@@ -752,6 +765,7 @@
       checked = v;
       showResult();
       saveHistory();
+      if (spotsOn) showSpots();
     } catch (err) {
       console.error(err);
       setStatus('Something went wrong while checking. Please try another photo.');
@@ -762,6 +776,132 @@
       if (again && isStale()) analyze();
     }
   }
+
+  // ---------- Diseased spots ----------
+
+  // A second, smaller model (training/train_lesion_seg.py) marks the pixels of the square that look diseased.
+  // It learned from PlantSeg's photos, whose diseased areas were outlined by hand, and is downloaded only when
+  // someone asks to see the spots, so the first visit is no bigger. The share it reports is of the whole
+  // square, not of the leaf: PlantSeg outlines diseased areas only, so leaf area cannot be learned from it.
+  const LESION_INFO_URL = 'model/lesion.json';
+  const LESION_CACHE_PREFIX = 'leafscan-lesion-';
+  let spotsOn = false;       // the user asked to see spots; later checks show them too
+  let lesionInfo = null;
+  let lesionLoading = null;  // promise while the lesion model downloads and starts
+  let spotsKey = '';         // the square the spots on screen belong to
+  let spotsViews = null;     // { plain: canvas, marked: ImageData, showing: 'marked' | 'plain' }
+
+  const squareKey = (v) => (v ? `${v.id}|${v.cx.toFixed(1)}|${v.cy.toFixed(1)}|${v.zoom.toFixed(3)}` : '');
+
+  function loadLesion() {
+    if (!lesionLoading) {
+      lesionLoading = (async () => {
+        lesionInfo = await (await fetch(LESION_INFO_URL, { cache: 'no-cache' })).json();
+        const { bytes } = await loadModelBytes(lesionInfo, (n) => {
+          if (n < lesionInfo.bytes) el.spotsBtn.textContent = `Downloading (first time only): ${Math.floor((n / lesionInfo.bytes) * 100)}%`;
+        }, LESION_CACHE_PREFIX);
+        el.spotsBtn.textContent = 'Finding spots…';
+        await runner.lesionLoad(bytes);
+      })();
+      lesionLoading.catch(() => { lesionLoading = null; });
+    }
+    return lesionLoading;
+  }
+
+  function renderSpotsButton() {
+    const showing = spotsOn && !el.spotsFig.hidden;
+    el.spotsBtn.textContent = showing ? 'Hide diseased spots' : 'Show diseased spots';
+    el.spotsBtn.setAttribute('aria-expanded', String(showing));
+  }
+
+  // Called by showResult: spots are offered for any result about a known plant, and spots of an older
+  // square are hidden until they are found again.
+  function renderSpotsBox(available) {
+    el.spotsBox.hidden = !available;
+    if (!available || squareKey(checked) !== spotsKey) el.spotsFig.hidden = true;
+    renderSpotsButton();
+  }
+
+  async function showSpots() {
+    const v = checked;
+    if (!runner || !runner.lesionRun || !source || !v || el.spotsBox.hidden) return;
+    const key = squareKey(v);
+    if (key === spotsKey && !el.spotsFig.hidden) return;
+    el.spotsBtn.disabled = true;
+    el.spotsBtn.textContent = 'Finding spots…';
+    el.spotsNote.textContent = '';
+    try {
+      await loadLesion();
+      const size = lesionInfo.size;
+      const r = cropRect(v);
+      const plain = scaleTo224(r.x, r.y, r.side, r.side, false, size);
+      const { mask } = await runner.lesionRun(toCHW(plain, size), size);
+      if (!source || source.id !== v.id || squareKey(checked) !== key || !spotsOn) return;
+      drawSpots(plain, mask, size);
+      spotsKey = key;
+    } catch (err) {
+      console.error(err);
+      el.spotsNote.textContent = 'Could not show the spots. The first time, LeafScan needs the internet to download them; connect and try again.';
+    } finally {
+      el.spotsBtn.disabled = false;
+      renderSpotsButton();
+    }
+  }
+
+  function drawSpots(plain, mask, size) {
+    const cut = lesionInfo.cut;
+    const ctx = el.spotsCanvas.getContext('2d');
+    el.spotsCanvas.width = el.spotsCanvas.height = size;
+    ctx.drawImage(plain, 0, 0);
+    const img = ctx.getImageData(0, 0, size, size);
+    const px = img.data;
+    const on = (p) => mask[p] >= cut;
+    let n = 0;
+    for (let p = 0; p < mask.length; p++) {
+      if (!on(p)) continue;
+      n++;
+      const x = p % size;
+      const edge = x === 0 || x === size - 1 || p < size || p >= mask.length - size ||
+        !on(p - 1) || !on(p + 1) || !on(p - size) || !on(p + size);
+      const a = edge ? 1 : 0.38;
+      const i = p * 4;
+      px[i] += (255 - px[i]) * a;          // magenta: stands out on green, yellow and brown leaves
+      px[i + 1] -= px[i + 1] * a;
+      px[i + 2] += (200 - px[i + 2]) * a;
+    }
+    ctx.putImageData(img, 0, 0);
+    spotsViews = { plain, marked: img, showing: 'marked' };
+    const share = n / mask.length;
+    const words = share < 0.005 ? 'No diseased-looking spots marked in this square'
+      : `Diseased-looking area: about ${share < 0.02 ? '1' : Math.round(share * 100)}% of the square`;
+    el.spotsText.textContent = `${words}. Tap the picture to compare it with the photo.`;
+    el.spotsCanvas.setAttribute('aria-label', `${words}. Marked areas are outlined in pink.`);
+    el.spotsNote.textContent = `Pink marks areas that look diseased. LeafScan learned them from ${lesionInfo.train_photos.toLocaleString()} ` +
+      `photos whose diseased areas were outlined by hand by the PlantSeg team; on ${lesionInfo.test_photos.toLocaleString()} test photos, ` +
+      `its marks and theirs overlapped ${Math.round(lesionInfo.test_iou * 100)}% (area both marked, out of the area either marked). ` +
+      'The share counts the whole square, not only the leaf, so fill the square with the leaf. It shows where to look, not how sick the plant is.';
+    el.spotsFig.hidden = false;
+  }
+
+  el.spotsBtn.addEventListener('click', () => {
+    if (spotsOn && !el.spotsFig.hidden) {
+      spotsOn = false;
+      el.spotsFig.hidden = true;
+      el.spotsNote.textContent = '';
+      renderSpotsButton();
+      return;
+    }
+    spotsOn = true;
+    showSpots();
+  });
+
+  el.spotsCanvas.addEventListener('click', () => {
+    if (!spotsViews) return;
+    const ctx = el.spotsCanvas.getContext('2d');
+    spotsViews.showing = spotsViews.showing === 'marked' ? 'plain' : 'marked';
+    if (spotsViews.showing === 'plain') ctx.drawImage(spotsViews.plain, 0, 0);
+    else ctx.putImageData(spotsViews.marked, 0, 0);
+  });
 
   function combine() {
     if (leaves.length === 1) return leaves[0].probs;
@@ -1024,6 +1164,7 @@
     renderOthers(ranked, outcome);
     renderMore(outcome, d);
     renderLeaves();
+    renderSpotsBox(!special && outcome !== 'unknown');
     renderFeedbackState();
 
     el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES || special;

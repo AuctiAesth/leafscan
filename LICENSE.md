@@ -16,10 +16,10 @@ To ask permission, open an issue on this repository.
 
 ## The trained model
 
-The image recognition model (`model/`) was trained on photos that other people published under the licences
-below. The team claims no rights over the model beyond what those licences allow, does not include any of the
-training photos here, and offers the model only as part of this non-commercial app. Whether a trained model counts
-as an adaptation of its training photos is not settled; anyone who wants to reuse the model must check these
+The image recognition models (`model/`: the disease model and the diseased-spots model) were trained on photos that other people published under the licences
+below. The team claims no rights over the models beyond what those licences allow, does not include any of the
+training photos here, and offers the models only as part of this non-commercial app. Whether a trained model counts
+as an adaptation of its training photos is not settled; anyone who wants to reuse the models must check these
 licences themselves (and, for PlantWild, ask its authors).
 
 | Training data | Licence |

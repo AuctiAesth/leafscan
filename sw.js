@@ -1,10 +1,11 @@
-// Offline support, in three stores so that updating the app never makes people download the big files again:
+// Offline support, in separate stores so that updating the app never makes people download the big files again:
 //   leafscan-app-<n>        the small app files; replaced on every app update
 //   leafscan-runtime-<ver>  ONNX Runtime (core about 14 MB, stored by the page); kept until the runtime changes
 //   leafscan-model-<ver>    the model's parts; written by the page itself (app.js), never touched here
+//   leafscan-lesion-<ver>   the diseased-spots model's parts, downloaded only when asked; same rules
 // The page registers this worker only after the model has loaded, so these files come from the browser's
 // own HTTP cache rather than being downloaded a second time.
-const APP_CACHE = 'leafscan-app-13';
+const APP_CACHE = 'leafscan-app-14';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',
@@ -17,6 +18,7 @@ const APP_FILES = [
   'data/kb.json',
   'model/labels.json',
   'model/model.json',
+  'model/lesion.json',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -27,7 +29,7 @@ const RUNTIME_FILES = [
   'vendor/ort.wasm.min.js',
   'vendor/ort-wasm-simd-threaded.mjs',
 ];
-const KEEP = (key) => key === APP_CACHE || key === RUNTIME_CACHE || key.startsWith('leafscan-model-');
+const KEEP = (key) => key === APP_CACHE || key === RUNTIME_CACHE || key.startsWith('leafscan-model-') || key.startsWith('leafscan-lesion-');
 const MODEL_PART = /\/model\/[^/]+\/part-\d+\.bin$/;
 const CACHE_FIRST = /\.(wasm|mjs|png|svg|woff2)$|\/vendor\//;
 

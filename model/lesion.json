@@ -1,0 +1,29 @@
+{
+ "version": "lesion-v1",
+ "source": "lesion_int8.onnx",
+ "bytes": 3760691,
+ "sha256": "f6d35b426b478d9d9a314be4df61b3567bde09335eed25565b3a51e79ac6e4fa",
+ "parts": [
+  {
+   "file": "part-000.bin",
+   "bytes": 2097152,
+   "sha256": "cc0b3bebf3ed4f032a8883b3d8993c58ca5260f54cd05f1e08e7155192513f86"
+  },
+  {
+   "file": "part-001.bin",
+   "bytes": 1663539,
+   "sha256": "ca432049be59d0fb7c91dc6dda78f332f910cb0016f8c9785a2d015c2a94ca8f"
+  }
+ ],
+ "runtime": {
+  "file": "vendor/ort-wasm-simd-threaded.wasm",
+  "cache": "leafscan-runtime-1.29.0",
+  "bytes": 13961845,
+  "sha256": "ec8580a9d7b9476ceee52e10a7f94124e4dc71a019d666ed6d4726697c109a4d"
+ },
+ "size": 320,
+ "cut": 0.45,
+ "test_iou": 0.6578,
+ "test_photos": 1954,
+ "train_photos": 7223
+}

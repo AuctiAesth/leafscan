@@ -70,7 +70,8 @@ use is non-commercial only.
   CC BY-NC 4.0, credited individually in `credits/gbif_photos.csv`. No dataset images are included here. The
   photos in PlantSeg and PlantWild were collected from websites, and their original photographers keep their
   rights. None of PlantSeg's photos comes from a Philippine website, which is why the study tests LeafScan on
-  Philippine plants in the field.
+  Philippine plants in the field. The "Show diseased spots" model (`model/lesion-v1/`) was trained on PlantSeg's
+  hand-drawn masks of the diseased areas (CC BY 4.0).
 - **Knowledge base:** summaries written from the PlantVillage disease library (Penn State University), CABI
   Plant Health Knowledge for AI / PlantwisePlus Pest Management Decision Guides (CC BY-NC-SA 4.0), and
   university extension and government fact sheets. Every record cites and links its sources. The summaries
