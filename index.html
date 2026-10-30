@@ -151,6 +151,7 @@
 
         <div class="message-slot">
           <div id="resultMessage" class="message"></div>
+          <p id="shortlist" class="shortlist" hidden></p>
           <div id="staleBar" class="stale-bar" hidden>
             <p><b>The square moved.</b><span class="visually-hidden"> This result is for the old square.</span></p>
             <button id="checkBtn" class="btn btn-primary" type="button">Check this leaf</button>
@@ -238,7 +239,7 @@
 
         <section class="study" id="studyBox" hidden aria-labelledby="studyTitle">
           <h3 id="studyTitle">Study log</h3>
-          <p class="small muted">Study mode is on. Fill in what you know and save; the photo and these details stay on this phone until you export them from History.</p>
+          <p class="small muted">Study mode is on. Fill in what you know and save; the photo and these details stay on this phone until you export them from History. Type the real plant: the log also records LeafScan's answer when it is told the plant.</p>
           <form id="studyForm" class="study-form">
             <label>Barangay<input name="barangay" autocomplete="off"></label>
             <label>Municipality<input name="municipality" autocomplete="off"></label>
@@ -246,6 +247,7 @@
             <label>Plant (Filipino / English)<input name="plant" autocomplete="off"></label>
             <label>Healthy or sick<select name="healthy"><option>sick</option><option>healthy</option><option value="">not sure</option></select></label>
             <label>What you think it is<input name="guess" autocomplete="off" placeholder="e.g. early blight"></label>
+            <label>Your guess was made<select name="guessWhen"><option value="">(choose)</option><option value="before">before seeing LeafScan</option><option value="after">after seeing LeafScan</option></select></label>
             <label>Garden or farm<select name="site"><option>garden</option><option>farm</option></select></label>
             <label>Background<select name="background"><option>natural</option><option>plain paper</option></select></label>
             <label>Light<select name="light"><option>sun</option><option>shade</option><option>cloudy</option></select></label>

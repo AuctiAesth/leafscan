@@ -66,7 +66,7 @@
     staleBar: $('staleBar'), checkBtn: $('checkBtn'), leafStrip: $('leafStrip'), addLeafBtn: $('addLeafBtn'),
     techBtn: $('techBtn'), autoCheck: $('autoCheck'),
     spotsBox: $('spotsBox'), spotsBtn: $('spotsBtn'), spotsFig: $('spotsFig'), spotsCanvas: $('spotsCanvas'),
-    spotsText: $('spotsText'), spotsNote: $('spotsNote'),
+    spotsText: $('spotsText'), spotsNote: $('spotsNote'), shortlist: $('shortlist'),
     detailsCard: $('detailsCard'), details: $('resultDetails'), symptomsTitle: $('symptomsTitle'), symptoms: $('resultSymptoms'),
     lookTitle: $('lookTitle'), look: $('resultLook'), manageTitle: $('manageTitle'), manage: $('resultManage'),
     chemNote: $('chemNote'), sourcesBox: $('sourcesBox'), sources: $('resultSources'), note: $('resultNote'),
@@ -237,6 +237,7 @@
       labels = await labelsRes.json();
       kb = await kbRes.json();
       byId = new Map(kb.conditions.map((c) => [c.id, c]));
+      fetch(SHORTLIST_URL).then((r) => (r.ok ? r.json() : null)).then((s) => { shortlistCuts = s; }).catch(() => {});
       entries = labels.map(mapLabel);
       keyIndex = new Map(entries.map((e, i) => [keyOf(i), i]));
       renderCrops();
@@ -800,7 +801,7 @@
         const { bytes } = await loadModelBytes(lesionInfo, (n) => {
           if (n < lesionInfo.bytes) el.spotsBtn.textContent = `Downloading (first time only): ${Math.floor((n / lesionInfo.bytes) * 100)}%`;
         }, LESION_CACHE_PREFIX);
-        el.spotsBtn.textContent = 'Finding spots�';
+        el.spotsBtn.textContent = 'Finding spots…';
         await runner.lesionLoad(bytes);
       })();
       lesionLoading.catch(() => { lesionLoading = null; });
@@ -828,7 +829,7 @@
     const key = squareKey(v);
     if (key === spotsKey && !el.spotsFig.hidden) return;
     el.spotsBtn.disabled = true;
-    el.spotsBtn.textContent = 'Finding spots�';
+    el.spotsBtn.textContent = 'Finding spots…';
     el.spotsNote.textContent = '';
     try {
       await loadLesion();
@@ -925,13 +926,13 @@
   // All classes ranked, and the ranking shown: when the user chose the plant, only that plant's classes (and
   // its group's), renormalized so they add up to 100%. A group member's disease counts as the chosen plant's
   // class of the same name (zucchini powdery mildew is squash powdery mildew when squash is chosen).
-  function ranking() {
+  function ranking(lock = plantLock) {
     const all = rank(combine());
-    if (!plantLock || plantLock === OTHER_PLANT) return { ranked: familyMerge(all), all };
+    if (!lock || lock === OTHER_PLANT) return { ranked: familyMerge(all), all };
     const mine = new Map();
     for (const { p, i } of all) {
-      if (!inGroup(entries[i].host, plantLock)) continue;
-      const twin = entries[i].host === plantLock ? i : keyIndex.get(`${plantLock}/${keyOf(i).split('/')[1]}`) ?? i;
+      if (!inGroup(entries[i].host, lock)) continue;
+      const twin = entries[i].host === lock ? i : keyIndex.get(`${lock}/${keyOf(i).split('/')[1]}`) ?? i;
       mine.set(twin, (mine.get(twin) || 0) + p);
     }
     const total = [...mine.values()].reduce((sum, p) => sum + p, 0) || 1;
@@ -1097,7 +1098,8 @@
     else if (!plantLock && top.p < NOT_RECOGNIZED) outcome = 'unknown';
     const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
     const doubtful = special || outcome === 'unsure' || outcome === 'unknown';
-    current = { ranked, all, top, d, band, outcome };
+    const shortlist = !plantLock && !special ? shortlistFor(all) : [];
+    current = { ranked, all, top, d, band, outcome, shortlist };
 
     el.summaryCard.hidden = false;
     el.detailsCard.hidden = false;
@@ -1156,6 +1158,7 @@
     if (!special) shown = { i: top.i, p: top.p, family: top.family };
 
     renderMessage(outcome, d, ranked, all);
+    renderShortlist(shortlist, outcome);
     const detailed = outcome === 'confident' || outcome === 'moderate';
     el.details.hidden = !detailed;
     el.sourcesBox.hidden = !detailed;
@@ -1409,6 +1412,31 @@
       a.textContent = s.title;
       return n ? ['; ', a] : [a];
     }));
+  }
+
+  // The shortlist: every class whose probability reaches the cut-off fitted for the predicted plant
+  // (training/fit_shortlist.py, split conformal at 90% on validation field photos). On the test field photos
+  // these lists held the true answer 91.4% of the time (median 2 names). Shown only when the answer is not
+  // confident and no plant is chosen; always saved in study mode so the field test measures its coverage.
+  const SHORTLIST_URL = 'model/shortlist.json';
+  let shortlistCuts = null;
+
+  function shortlistFor(all) {
+    if (!shortlistCuts || !all.length) return [];
+    const cut = shortlistCuts.hosts[entries[all[0].i].host] ?? shortlistCuts.overall;
+    return all.filter((x, k) => k === 0 || x.p >= cut);
+  }
+
+  function renderShortlist(shortlist, outcome) {
+    // Shown with the same squash-family merge as the main answer; the study log keeps the exact classes.
+    const shown = shortlist.length ? familyMerge(shortlist) : [];
+    const names = [...new Set(shown.map((x) => { const o = present(x); return `${o.plant}: ${o.name}`; }))];
+    const show = names.length > 1 && (outcome === 'moderate' || outcome === 'unsure');
+    el.shortlist.hidden = !show;
+    if (!show) return;
+    const rate = Math.round((shortlistCuts.test_coverage || 90) / 10);
+    el.shortlist.replaceChildren(make('b', null, 'Most likely one of these: '), names.join(' · '),
+      make('span', 'muted', ` (on test photos, lists like this held the right answer about ${rate} in 10 times)`));
   }
 
   function renderOthers(ranked, outcome) {
@@ -1908,7 +1936,9 @@
   const STUDY_COLUMNS = ['photo_file', 'date', 'barangay', 'municipality', 'province', 'plant (Filipino / English)',
     'healthy or sick', 'what you think it is', 'confirmed by (technician / office)', 'confirmed disease',
     'garden or farm', 'background (natural / plain paper)', 'light (sun / shade / cloudy)', 'phone model', 'notes',
-    'leafscan_result', 'leafscan_confidence', 'leafscan_plant_chosen_by_user', 'leafscan_model'];
+    'leafscan_result', 'leafscan_confidence', 'leafscan_plant_chosen_by_user', 'leafscan_model',
+    'plant_given', 'leafscan_result_plant_given', 'leafscan_confidence_plant_given', 'leafscan_shortlist',
+    'guess_written', 'expert_saw_leafscan'];
   const REMEMBERED = ['barangay', 'municipality', 'province', 'site', 'background', 'light', 'phone'];
   let studySavedFor = null; // the photo whose entry has been saved, so it is not saved twice
 
@@ -1935,6 +1965,23 @@
 
   const studyAll = () => studyTx('readonly', (s) => s.getAll());
 
+  // The plant the team typed in the form ("Kamatis / Tomato"), matched to a LeafScan plant, so each entry also
+  // records the answer LeafScan gives when it is told the plant. The first answer is kept as it was.
+  function hostFromPlantText(text) {
+    const words = text.toLowerCase().split(/[\/,;()]+/).map((w) => w.trim()).filter(Boolean);
+    for (const [key, h] of Object.entries(kb.hosts)) {
+      const names = [key.replace(/_/g, ' '), h.en, h.fil, ...(h.search || [])].filter(Boolean).map((n) => n.toLowerCase());
+      if (words.some((w) => names.includes(w))) return key;
+    }
+    return '';
+  }
+
+  function plantGivenAnswer(host) {
+    if (!host || !leaves.length) return null;
+    const top = ranking(host).ranked[0];
+    return top ? { id: labels[top.i].id, p: top.p.toFixed(3) } : null;
+  }
+
   function photoBlob(max = 1024) {
     const scale = Math.min(1, max / Math.max(source.w, source.h));
     const c = document.createElement('canvas');
@@ -1957,6 +2004,7 @@
       f.plant.value = h ? [h.fil, h.en].filter(Boolean).join(' / ') : '';
       f.healthy.value = current.d.healthy && current.outcome !== 'unknown' ? 'healthy' : 'sick';
       f.guess.value = '';
+      f.guessWhen.value = '';
       f.notes.value = '';
       el.studySave.disabled = false;
       el.studySave.textContent = 'Save to study log';
@@ -1992,6 +2040,13 @@
         plantChosen: plantLock || '', model: modelVersion,
         thumb: leaf ? leaf.thumb : '', photo: await photoBlob(),
       };
+      const given = plantLock && plantLock !== OTHER_PLANT ? plantLock : hostFromPlantText(val('plant'));
+      const answer = plantGivenAnswer(given);
+      Object.assign(entry, {
+        plantGiven: given, resultPlantGiven: answer ? answer.id : '', confidencePlantGiven: answer ? answer.p : '',
+        shortlist: (current.shortlist || []).map((s) => labels[s.i].id).join('; '),
+        guessWhen: f.guessWhen ? f.guessWhen.value : '', expertSaw: '',
+      });
       await studyTx('readwrite', (s) => s.add(entry));
       studySavedFor = source.id;
       el.studySave.textContent = 'Saved';
@@ -2022,7 +2077,9 @@
         make('div', 's-meta', [x.date, [x.barangay, x.municipality].filter(Boolean).join(', '),
           res ? `LeafScan: ${res.healthy ? 'healthy' : res.name} ${pct0(Number(x.confidence))}` : x.result].filter(Boolean).join(' · ')));
       const confirm = make('div', 's-confirm');
-      for (const [key, label] of [['confirmedBy', 'Confirmed by'], ['confirmedDisease', 'Confirmed disease']]) {
+      // expertSaw: whether the expert had seen LeafScan's answer before deciding (the reference should be blind).
+      for (const [key, label] of [['confirmedBy', 'Confirmed by'], ['confirmedDisease', 'Confirmed disease'],
+        ['expertSaw', 'Expert saw LeafScan first? (yes/no)']]) {
         const input = document.createElement('input');
         input.value = x[key] || '';
         input.placeholder = label;
@@ -2093,7 +2150,8 @@
     el.studyExportNote.textContent = 'Preparing the export…';
     const rows = entries.map((x) => [x.photoFile, x.date, x.barangay, x.municipality, x.province, x.plant, x.healthy,
       x.guess, x.confirmedBy, x.confirmedDisease, x.site, x.background, x.light, x.phone, x.notes,
-      x.result, x.confidence, x.plantChosen, x.model]);
+      x.result, x.confidence, x.plantChosen, x.model, x.plantGiven || '', x.resultPlantGiven || '',
+      x.confidencePlantGiven || '', x.shortlist || '', x.guessWhen || '', x.expertSaw || '']);
     const csv = [STUDY_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
     const files = [{ name: 'photo_log.csv', data: new TextEncoder().encode('﻿' + csv) }];
     for (const x of entries) files.push({ name: `photos/${x.photoFile}`, data: new Uint8Array(await x.photo.arrayBuffer()) });
@@ -2276,6 +2334,17 @@
       el.offlineNote.textContent = 'Saved on this device: LeafScan works without internet after the first visit.' +
         (isIOS && !standalone ? ' On iPhone or iPad, tap Share → Add to Home Screen to install it.' : '');
     }).catch((err) => console.warn('Service worker failed', err));
+    keepStored();
+  }
+
+  // Without this, a phone that runs low on space may delete the stored model ("best effort" storage) and
+  // download it again on the next visit, possibly in the field. Chrome decides silently; nothing blocks scanning.
+  async function keepStored() {
+    try {
+      if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) {
+        await navigator.storage.persist();
+      }
+    } catch { /* not supported: storage stays best effort */ }
   }
 
   el.retryBtn.addEventListener('click', () => startModel());

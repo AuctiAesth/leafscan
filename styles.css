@@ -746,3 +746,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 .spots-fig figcaption { margin-top: 6px; font-size: 0.95rem; color: var(--ink); }
 .spots-note { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); max-width: 60ch; }
 .spots-note:empty { display: none; }
+
+/* Shortlist of likely answers (conformal set) */
+.shortlist { margin: 8px 0 0; font-size: 0.95rem; line-height: 1.45; }
+.shortlist .muted { color: var(--muted); font-size: 0.85rem; }
