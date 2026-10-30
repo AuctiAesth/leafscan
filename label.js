@@ -1,8 +1,9 @@
 /* LeafScan Second Labeller: a second team member labels exported study photos without seeing the first label
    (the code in the file name), the team's guess or LeafScan's answer. Photos come from a study ZIP exported by
    Study mode; problems and checks come from the same data/field_codes.json and data/kb.json as the app and the
-   printed Field ID Key. The labels are downloaded as a CSV that training/label_agreement.py compares with the
-   first labels (Cohen's kappa). Nothing is uploaded. */
+   printed Field ID Key. An agriculturist uses the same page (role "agriculturist", letter X): the team's checks are
+   hidden for them, and they can add a diagnosis in their own words and how sure they are. The labels are downloaded
+   as a CSV that training/label_agreement.py compares with the first labels (Cohen's kappa). Nothing is uploaded. */
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -11,6 +12,7 @@
     labelCard: $('labelCard'), counter: $('counter'), doneCount: $('doneCount'), bar: $('bar'), photo: $('photo'),
     wholeBox: $('wholeBox'), whole: $('whole'), crop: $('crop'), problems: $('problems'), check: $('check'),
     prev: $('prev'), next: $('next'), doneCard: $('doneCard'), summary: $('summary'), download: $('download'),
+    role: $('role'), diag: $('diag'), sure: $('sure'),
   };
 
   let codes = null;
@@ -18,7 +20,7 @@
   let items = [];      // photos to label, in this labeller's random order
   let wholeFor = {};   // "CROP-SITE-Pnn" -> object URL of the L0 whole-plant photo
   let pos = 0;
-  let labels = {};     // photo_file -> problem code
+  let labels = {};     // photo_file -> { code, text, sure }
   let storeKey = '';
   let zipName = '';
 
@@ -131,13 +133,15 @@
       items = shuffle(todo.filter((it) => it.url), `${rater}|${zipName}`);
       storeKey = `leafscan.label2.${rater}.${zipName}`;
       labels = store.get(storeKey);
-      pos = Math.max(0, items.findIndex((it) => !labels[it.file]));
-      if (items.every((it) => labels[it.file])) pos = 0;
+      for (const [k, v] of Object.entries(labels)) if (typeof v === 'string') labels[k] = { code: v };
+      pos = Math.max(0, items.findIndex((it) => !labelled(it)));
+      if (items.every(labelled)) pos = 0;
       el.startNote.textContent = `${items.length} photos to label` +
         (own ? `; ${own} of your own skipped` : '') + (uncoded ? `; ${uncoded} without a study code skipped` : '') + '.';
       el.labelCard.hidden = false;
       el.doneCard.hidden = false;
       el.rater.disabled = true;
+      el.role.disabled = true;
       show();
     } catch (err) {
       console.error(err);
@@ -146,9 +150,17 @@
     }
   }
 
+  const isExpert = () => el.role.value === 'expert';
+  const labelled = (x) => !!(labels[x.file] && (labels[x.file].code || labels[x.file].text));
+  function save(file, change) {
+    labels[file] = { ...(labels[file] || {}), ...change };
+    store.set(storeKey, labels);
+  }
+
   function show() {
     const it = items[pos];
-    const done = items.filter((x) => labels[x.file]).length;
+    const cur = labels[it.file] || {};
+    const done = items.filter(labelled).length;
     el.counter.textContent = `Photo ${pos + 1} of ${items.length}`;
     el.doneCount.textContent = `${done} labelled`;
     el.bar.style.width = `${(100 * done) / items.length}%`;
@@ -162,12 +174,15 @@
     el.problems.replaceChildren(...problemsOf(crop).map((p) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.setAttribute('aria-pressed', String(labels[it.file] === p.code));
-      b.append(Object.assign(document.createElement('b'), { textContent: p.code }), problemName(p));
-      b.addEventListener('click', () => { labels[it.file] = p.code; store.set(storeKey, labels); show(); });
+      b.setAttribute('aria-pressed', String(cur.code === p.code));
+      const name = p.code === 'OTH' ? 'Other problem (write it below)' : problemName(p);
+      b.append(Object.assign(document.createElement('b'), { textContent: p.code }), name);
+      b.addEventListener('click', () => { save(it.file, { code: p.code }); show(); });
       return b;
     }));
-    renderCheck(problemsOf(crop).find((p) => p.code === labels[it.file]));
+    renderCheck(isExpert() ? null : problemsOf(crop).find((p) => p.code === cur.code));
+    el.diag.value = cur.text || '';
+    for (const b of el.sure.querySelectorAll('button')) b.setAttribute('aria-pressed', String(cur.sure === b.dataset.sure));
     el.prev.disabled = pos === 0;
     el.next.textContent = pos === items.length - 1 ? 'Finish' : 'Next';
     el.summary.textContent = `${done} of ${items.length} photos labelled from ${zipName}.` +
@@ -185,6 +200,12 @@
   }
 
   el.zipInput.addEventListener('change', () => { if (el.zipInput.files[0]) open(el.zipInput.files[0]); });
+  el.role.addEventListener('change', () => { if (isExpert() && !el.rater.value) el.rater.value = 'X'; });
+  el.diag.addEventListener('input', () => { save(items[pos].file, { text: el.diag.value.trim() }); });
+  el.diag.addEventListener('change', () => show());
+  for (const b of el.sure.querySelectorAll('button')) {
+    b.addEventListener('click', () => { save(items[pos].file, { sure: b.dataset.sure }); show(); });
+  }
   el.whole.addEventListener('click', () => { el.photo.src = el.whole.src === el.photo.src ? items[pos].url : el.whole.src; });
   el.prev.addEventListener('click', () => { if (pos > 0) { pos--; show(); } });
   el.next.addEventListener('click', () => {
@@ -193,8 +214,11 @@
 
   el.download.addEventListener('click', () => {
     const rater = el.rater.value.trim().toUpperCase();
-    const rows = [['photo_file', 'second_labeller', 'second_problem_code', 'zip']];
-    for (const it of items) if (labels[it.file]) rows.push([it.file, rater, labels[it.file], zipName]);
+    const rows = [['photo_file', 'second_labeller', 'role', 'second_problem_code', 'diagnosis', 'how_sure', 'zip']];
+    for (const it of items) {
+      const l = labels[it.file];
+      if (labelled(it)) rows.push([it.file, rater, el.role.value, l.code || '', l.text || '', l.sure || '', zipName]);
+    }
     const csv = rows.map((r) => r.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\r\n') + '\r\n';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));

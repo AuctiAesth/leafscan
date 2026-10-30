@@ -40,6 +40,14 @@
     .lb-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 14px; }
     .lb-note { font-size: .85rem; color: var(--muted); }
     .lb-error { color: var(--disease); font-weight: 600; }
+    .lb-row select, .lb-field textarea { font: inherit; font-size: 1rem; color: var(--ink); background: var(--ground);
+      border: 1px solid var(--rule-strong); border-radius: 10px; padding: 9px 10px; min-height: 42px; }
+    .lb-field { display: grid; gap: 4px; margin-top: 12px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .lb-field textarea { width: 100%; resize: vertical; }
+    .lb-sure { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .lb-sure button { font: inherit; font-size: .9rem; color: var(--ink); background: var(--ground); border: 1px solid var(--rule-strong);
+      border-radius: 999px; padding: 7px 14px; min-height: 40px; cursor: pointer; }
+    .lb-sure button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -53,10 +61,13 @@
       <p>Open a study ZIP that a teammate exported from LeafScan. Each photo appears in random order, without its code,
         the first label or LeafScan's answer, so your label is independent. Choose the problem from what you see,
         using the checks from the Field ID Key. Your own photos (your member letter) are skipped.</p>
+      <p>Agriculturists: choose <b>Agriculturist</b> and the letter <b>X</b>. Choose the closest problem, or <b>OTH</b>
+        if it is not listed, and write your diagnosis in your own words. The team's checks are hidden for you.</p>
       <p class="lb-note">Nothing leaves this device. Your labels are kept here as you go, so you can stop and open
         the same ZIP later to continue.</p>
       <div class="lb-row">
-        <label>Your member letter<input id="rater" type="text" maxlength="1" autocomplete="off" placeholder="C"></label>
+        <label>I am<select id="role"><option value="team">a team member</option><option value="expert">an agriculturist</option></select></label>
+        <label>Your letter<input id="rater" type="text" maxlength="1" autocomplete="off" placeholder="C"></label>
         <label>Study ZIP<input id="zipInput" type="file" accept=".zip,application/zip"></label>
       </div>
       <p id="startNote" class="lb-note" role="status"></p>
@@ -76,6 +87,13 @@
       <div class="lb-crop" id="crop"></div>
       <div class="lb-problems" id="problems" role="group" aria-label="Problem"></div>
       <div class="lb-check" id="check" hidden></div>
+      <label class="lb-field">Diagnosis in your own words (optional)
+        <textarea id="diag" rows="2" placeholder="e.g. Cercospora leaf spot, early stage; or a problem not in the list"></textarea></label>
+      <div class="lb-sure" id="sure" role="group" aria-label="How sure are you?">How sure?
+        <button type="button" data-sure="sure" aria-pressed="false">Sure</button>
+        <button type="button" data-sure="fairly sure" aria-pressed="false">Fairly sure</button>
+        <button type="button" data-sure="not sure" aria-pressed="false">Not sure</button>
+      </div>
       <div class="lb-nav">
         <button class="btn" id="prev" type="button">Back</button>
         <button class="btn btn-primary" id="next" type="button">Next</button>
