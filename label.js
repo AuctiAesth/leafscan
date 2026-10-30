@@ -10,7 +10,7 @@
   const el = {
     rater: $('rater'), zipInput: $('zipInput'), startNote: $('startNote'), startCard: $('startCard'),
     labelCard: $('labelCard'), counter: $('counter'), doneCount: $('doneCount'), bar: $('bar'), photo: $('photo'),
-    wholeBox: $('wholeBox'), whole: $('whole'), crop: $('crop'), problems: $('problems'), check: $('check'),
+    wholeBox: $('wholeBox'), crop: $('crop'), problems: $('problems'), check: $('check'),
     prev: $('prev'), next: $('next'), doneCard: $('doneCard'), summary: $('summary'), download: $('download'),
     role: $('role'), diag: $('diag'), sure: $('sure'),
   };
@@ -19,6 +19,7 @@
   let kb = null;
   let items = [];      // photos to label, in this labeller's random order
   let wholeFor = {};   // "CROP-SITE-Pnn" -> object URL of the L0 whole-plant photo
+  let underFor = {};   // "CROP-SITE-Pnn-Ln" -> object URL of that leaf's underside photo (Un)
   let pos = 0;
   let labels = {};     // photo_file -> { code, text, sure }
   let storeKey = '';
@@ -118,16 +119,20 @@
         return f ? URL.createObjectURL(new Blob([await unzip(f)], { type: 'image/jpeg' })) : '';
       };
       wholeFor = {};
+      underFor = {};
       const todo = [];
       let own = 0, uncoded = 0;
       for (const r of rows) {
         if (!r.code || !cropOf(r.crop_code)) { uncoded++; continue; }
         if (r.site_code[0] === rater) { own++; continue; }
-        if (r.leaf_no === 'L0') { wholeFor[[r.crop_code, r.site_code, r.plant_no].join('-')] = r.photo_file; continue; }
-        todo.push({ file: r.photo_file, crop: r.crop_code, plant: [r.crop_code, r.site_code, r.plant_no].join('-') });
+        const plant = [r.crop_code, r.site_code, r.plant_no].join('-');
+        if (r.leaf_no === 'L0') { wholeFor[plant] = r.photo_file; continue; }
+        if (r.leaf_no[0] === 'U') { underFor[`${plant}-L${r.leaf_no.slice(1)}`] = r.photo_file; continue; }
+        todo.push({ file: r.photo_file, crop: r.crop_code, plant, leaf: `${plant}-${r.leaf_no}` });
       }
       if (!todo.length) throw new Error(own ? 'Every coded photo in this ZIP is yours: label a teammate\'s ZIP.' : 'This ZIP has no coded photos of the study crops.');
       for (const k of Object.keys(wholeFor)) wholeFor[k] = await url(wholeFor[k]);
+      for (const k of Object.keys(underFor)) underFor[k] = await url(underFor[k]);
       for (const it of todo) it.url = await url(it.file);
       zipName = file.name;
       items = shuffle(todo.filter((it) => it.url), `${rater}|${zipName}`);
@@ -164,10 +169,22 @@
     el.counter.textContent = `Photo ${pos + 1} of ${items.length}`;
     el.doneCount.textContent = `${done} labelled`;
     el.bar.style.width = `${(100 * done) / items.length}%`;
-    el.photo.src = it.url;
-    const whole = wholeFor[it.plant];
-    el.wholeBox.hidden = !whole;
-    if (whole) el.whole.src = whole;
+    // The leaf to label, plus the plant's whole-plant photo and this leaf's underside when they were taken.
+    const views = [['This leaf', it.url], ['Whole plant', wholeFor[it.plant]], ['Underside', underFor[it.leaf]]].filter((v) => v[1]);
+    const showView = (src) => {
+      el.photo.src = src;
+      for (const b of el.wholeBox.children) b.setAttribute('aria-pressed', String(b.dataset.src === src));
+    };
+    el.wholeBox.hidden = views.length < 2;
+    el.wholeBox.replaceChildren(...views.map(([name, src]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.src = src;
+      b.append(Object.assign(document.createElement('img'), { src, alt: '' }), name);
+      b.addEventListener('click', () => showView(src));
+      return b;
+    }));
+    showView(it.url);
     const crop = cropOf(it.crop);
     const h = kb.hosts[crop.host] || {};
     el.crop.textContent = `${crop.code} · ${[h.fil, h.en].filter(Boolean).join(' / ')}: what problem do you see?`;
@@ -206,7 +223,6 @@
   for (const b of el.sure.querySelectorAll('button')) {
     b.addEventListener('click', () => { save(items[pos].file, { sure: b.dataset.sure }); show(); });
   }
-  el.whole.addEventListener('click', () => { el.photo.src = el.whole.src === el.photo.src ? items[pos].url : el.whole.src; });
   el.prev.addEventListener('click', () => { if (pos > 0) { pos--; show(); } });
   el.next.addEventListener('click', () => {
     if (pos < items.length - 1) { pos++; show(); } else el.doneCard.scrollIntoView({ behavior: 'smooth' });

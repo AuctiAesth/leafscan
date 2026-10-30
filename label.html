@@ -27,8 +27,11 @@
     .lb-progress div { height: 100%; background: var(--accent); width: 0; }
     .lb-photo { position: relative; background: var(--stage); border-radius: 12px; overflow: hidden; }
     .lb-photo img { display: block; width: 100%; max-height: 62vh; object-fit: contain; }
-    .lb-whole { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: .85rem; color: var(--muted); }
-    .lb-whole img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; cursor: zoom-in; }
+    .lb-whole { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .lb-whole button { display: grid; gap: 3px; justify-items: center; font: inherit; font-size: .75rem; color: var(--muted);
+      background: none; border: 0; padding: 0; cursor: pointer; }
+    .lb-whole img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; border: 2px solid transparent; }
+    .lb-whole button[aria-pressed="true"] img { border-color: var(--accent); }
     .lb-crop { font-family: var(--serif); font-size: 1.15rem; margin: 12px 0 6px; }
     .lb-problems { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
     .lb-problems button { text-align: left; font: inherit; font-size: .92rem; color: var(--ink); background: var(--ground);
@@ -80,10 +83,7 @@
       </div>
       <div class="lb-progress"><div id="bar"></div></div>
       <div class="lb-photo"><img id="photo" alt="Leaf photo to label"></div>
-      <div class="lb-whole" id="wholeBox" hidden>
-        <img id="whole" alt="Whole plant">
-        <span>Whole plant, for wilts and viruses. Tap to enlarge.</span>
-      </div>
+      <div class="lb-whole" id="wholeBox" hidden aria-label="Other views of this plant"></div>
       <div class="lb-crop" id="crop"></div>
       <div class="lb-problems" id="problems" role="group" aria-label="Problem"></div>
       <div class="lb-check" id="check" hidden></div>

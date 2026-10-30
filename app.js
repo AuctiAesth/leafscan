@@ -2076,15 +2076,18 @@
   });
   for (const k of ['plantNo', 'leafNo', 'photoSet']) el.studyForm.elements[k].addEventListener('input', renderStudyCode);
 
-  // After a save: L0 (whole plant) -> L1 -> L2 -> L3 -> the next plant's L1.
+  // After a save. Test plants get a whole-plant photo and two drawn leaves: L0 -> L1 -> L2 -> the next plant's L0.
+  // Training plants: L0 -> L1 -> L2 -> L3 -> the next plant's L1. An underside photo (Un, underside of Ln) moves on
+  // as if Ln had just been saved.
   function nextLeaf() {
     const f = el.studyForm.elements;
-    const order = ['L0', 'L1', 'L2', 'L3'];
-    const i = order.indexOf(f.leafNo.value);
-    if (i < 3) { f.leafNo.value = order[i + 1]; return; }
-    f.leafNo.value = 'L1';
-    const n = parseInt(f.plantNo.value, 10);
-    if (n >= 1 && n < 99) f.plantNo.value = String(n + 1);
+    const test = f.photoSet.value === 'test';
+    const last = test ? 2 : 3;
+    const n = Number(f.leafNo.value.slice(1));
+    if (n < last) { f.leafNo.value = `L${n + 1}`; return; }
+    f.leafNo.value = test ? 'L0' : 'L1';
+    const p = parseInt(f.plantNo.value, 10);
+    if (p >= 1 && p < 99) f.plantNo.value = String(p + 1);
   }
 
   const studyOn = () => { try { return localStorage.getItem(STUDY_KEY) === '1'; } catch { return false; } };
