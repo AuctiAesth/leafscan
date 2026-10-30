@@ -5,11 +5,13 @@
 //   leafscan-lesion-<ver>   the diseased-spots model's parts, downloaded only when asked; same rules
 // The page registers this worker only after the model has loaded, so these files come from the browser's
 // own HTTP cache rather than being downloaded a second time.
-const APP_CACHE = 'leafscan-app-19';
+const APP_CACHE = 'leafscan-app-20';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',
   'index.html',
+  'label.html',
+  'label.js',
   'styles.css',
   'app.js',
   'worker.js',

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LeafScan Second Labeller</title>
+  <meta name="description" content="For the LeafScan research team: label exported field photos a second time, without seeing the first label or LeafScan's answer.">
+  <meta name="theme-color" content="#1c5136" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#173826" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { background: var(--ground); color: var(--ink); font-family: var(--sans); margin: 0; }
+    .lb-bar { background: var(--brand); color: var(--on-brand); padding: 14px 16px; }
+    .lb-bar h1 { font-family: var(--serif); font-size: 1.35rem; margin: 0; }
+    .lb-bar a { color: var(--on-brand); font-size: .85rem; }
+    .lb-main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .lb-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    .lb-card h2 { font-family: var(--serif); font-size: 1.2rem; margin: 0 0 8px; }
+    .lb-card p { margin: 0 0 10px; }
+    .lb-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .lb-row label { display: grid; gap: 4px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    .lb-row input[type=text] { font: inherit; font-size: 1rem; width: 5.5em; text-transform: uppercase; color: var(--ink);
+      background: var(--ground); border: 1px solid var(--rule-strong); border-radius: 10px; padding: 9px 10px; min-height: 42px; }
+    .lb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .lb-progress { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin: 8px 0 12px; }
+    .lb-progress div { height: 100%; background: var(--accent); width: 0; }
+    .lb-photo { position: relative; background: var(--stage); border-radius: 12px; overflow: hidden; }
+    .lb-photo img { display: block; width: 100%; max-height: 62vh; object-fit: contain; }
+    .lb-whole { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: .85rem; color: var(--muted); }
+    .lb-whole img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; cursor: zoom-in; }
+    .lb-crop { font-family: var(--serif); font-size: 1.15rem; margin: 12px 0 6px; }
+    .lb-problems { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .lb-problems button { text-align: left; font: inherit; font-size: .92rem; color: var(--ink); background: var(--ground);
+      border: 1px solid var(--rule-strong); border-radius: 10px; padding: 9px 10px; min-height: 44px; cursor: pointer; }
+    .lb-problems button b { font-family: ui-monospace, Consolas, monospace; margin-right: 4px; }
+    .lb-problems button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    .lb-check { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: .88rem; }
+    .lb-check p { margin: 0 0 4px; }
+    .lb-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 14px; }
+    .lb-note { font-size: .85rem; color: var(--muted); }
+    .lb-error { color: var(--disease); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header class="lb-bar">
+    <h1>LeafScan Second Labeller</h1>
+    <a href="./">Back to LeafScan</a>
+  </header>
+  <main class="lb-main">
+    <section class="lb-card" id="startCard">
+      <h2>Label photos a second time</h2>
+      <p>Open a study ZIP that a teammate exported from LeafScan. Each photo appears in random order, without its code,
+        the first label or LeafScan's answer, so your label is independent. Choose the problem from what you see,
+        using the checks from the Field ID Key. Your own photos (your member letter) are skipped.</p>
+      <p class="lb-note">Nothing leaves this device. Your labels are kept here as you go, so you can stop and open
+        the same ZIP later to continue.</p>
+      <div class="lb-row">
+        <label>Your member letter<input id="rater" type="text" maxlength="1" autocomplete="off" placeholder="C"></label>
+        <label>Study ZIP<input id="zipInput" type="file" accept=".zip,application/zip"></label>
+      </div>
+      <p id="startNote" class="lb-note" role="status"></p>
+    </section>
+
+    <section class="lb-card" id="labelCard" hidden>
+      <div class="lb-head">
+        <h2 id="counter"></h2>
+        <span id="doneCount" class="lb-note"></span>
+      </div>
+      <div class="lb-progress"><div id="bar"></div></div>
+      <div class="lb-photo"><img id="photo" alt="Leaf photo to label"></div>
+      <div class="lb-whole" id="wholeBox" hidden>
+        <img id="whole" alt="Whole plant">
+        <span>Whole plant, for wilts and viruses. Tap to enlarge.</span>
+      </div>
+      <div class="lb-crop" id="crop"></div>
+      <div class="lb-problems" id="problems" role="group" aria-label="Problem"></div>
+      <div class="lb-check" id="check" hidden></div>
+      <div class="lb-nav">
+        <button class="btn" id="prev" type="button">Back</button>
+        <button class="btn btn-primary" id="next" type="button">Next</button>
+      </div>
+    </section>
+
+    <section class="lb-card" id="doneCard" hidden>
+      <h2>Your labels</h2>
+      <p id="summary"></p>
+      <button class="btn btn-primary" id="download" type="button">Download my labels (CSV)</button>
+      <p class="lb-note">Send the CSV to the team leader with the ZIP's name. Labels are compared with the first
+        labels only after everyone has finished.</p>
+    </section>
+  </main>
+  <script src="label.js"></script>
+</body>
+</html>
