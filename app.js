@@ -30,9 +30,15 @@
   // Out of 10 answers in each band, how many were right (rounded down): 96.0% [95.0-96.8], 77.4% [74.4-80.2],
   // 44.4% [41.3-47.5].
   const RIGHT_IN_10 = { confident: 9, moderate: 7, unsure: 4 };
-  // The same when the user chooses the plant and only that plant's problems are ranked: 96.4%, 60.5%, 41.9%.
+  // The same when the user chooses the plant and only that plant's problems are ranked: 96.4%, 60.5%, 41.9%;
+  // with the weak-match rule below 95.9%, 67.4%, 40.2% (results/plant_chosen_weak_match.json).
   // Choosing the plant raises overall accuracy on these photos from 77.5% to 90.7%.
   const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 4 };
+  // Weak match: with a plant chosen, the app shares 100% among that plant's few problems, so fruit, insect damage
+  // or another plant can reach "high confidence". When the model's raw probability for the chosen plant's best
+  // problem is below this, the answer is shown as medium at most, with a warning (training/weak_match.py: on test
+  // photos 7.7% of real cases, still right 72.1%; 99.1% of photos of other plants with a crop chosen).
+  const WEAK_MATCH = 0.05;
   // Below this top probability the guess was right only 33.1% of the time (about 3 in 10), and the plant 45.1%.
   const NOT_RECOGNIZED = 0.30;
   const OTHER_PLANT = 'other';
@@ -1102,7 +1108,13 @@
     const top = ranked[0];
     const d = present(top);
     const kind = kindOf(d);
-    const band = bandOf(top.p);
+    const weakMatch = !!plantLock && plantLock !== OTHER_PLANT && hostHasProblems(plantLock) &&
+      Math.max(0, ...all.filter((x) => inGroup(entries[x.i].host, plantLock)).map((x) => x.p)) < WEAK_MATCH;
+    // Also medium at most when LeafScan clearly sees another plant than the one chosen (the message asks whether
+    // the choice is right): 1.5% of real cases on test photos, still right 81.6% (training/weak_match.py notes).
+    const otherPlantSeen = !!plantLock && plantLock !== OTHER_PLANT && all[0].p >= CONFIDENT &&
+      !inGroup(entries[all[0].i].host, plantLock);
+    const band = (weakMatch || otherPlantSeen) && bandOf(top.p) === 'confident' ? 'moderate' : bandOf(top.p);
     let outcome = band;
     if (plantLock === OTHER_PLANT) outcome = 'uncovered';
     else if (!plantLock && entries[top.i].host === OTHER_HOST && top.p >= NOT_RECOGNIZED) outcome = 'other';
@@ -1111,7 +1123,7 @@
     const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
     const doubtful = special || outcome === 'unsure' || outcome === 'unknown';
     const shortlist = !plantLock && !special ? shortlistFor(all) : [];
-    current = { ranked, all, top, d, band, outcome, shortlist };
+    current = { ranked, all, top, d, band, outcome, shortlist, weakMatch };
 
     el.summaryCard.hidden = false;
     el.detailsCard.hidden = false;
@@ -1201,6 +1213,10 @@
     if (plantLock && plantLock !== OTHER_PLANT && seen.p >= CONFIDENT && !inGroup(entries[seen.i].host, plantLock)) {
       parts.push(make('p', 'quality',
         `To LeafScan this looks more like ${plantName(entries[seen.i].host).toLowerCase()} (${pct0(seen.p)}). Is the plant choice right?`));
+    } else if (current.weakMatch) {
+      parts.push(make('p', 'quality',
+        `LeafScan sees only a weak match among ${plantName(plantLock).toLowerCase()} problems. It knows leaf problems only, ` +
+        'so fruit, insect damage or a problem not in its list can look like one of them. Compare the signs below.'));
     }
     if (d.family && outcome !== 'unknown') {
       parts.push(make('p', 'quality',
@@ -1617,7 +1633,7 @@
     const more = kb.more || [];
     for (const m of more) for (const h of m.hosts) if (!byHost.has(h)) byHost.set(h, []);
     const hosts = [...byHost.keys()].sort((a, b) => plantName(a).localeCompare(plantName(b)));
-    el.emptySub.textContent = `Recognizes ${problems} problems on ${photoHosts.length} plants. The photo never leaves your device.`;
+    el.emptySub.textContent = `Recognizes ${problems} leaf problems on ${photoHosts.length} plants. Leaves only, not fruits or stems. The photo never leaves your device.`;
     el.introFacts.textContent = `${problems} problems on ${photoHosts.length} plants · about 3 in 4 right on test field photos · photos never leave your device`;
     el.plantsLede.textContent = `LeafScan recognizes ${problems} problems on ${photoHosts.length} plants from a photo, plus healthy leaves of each plant. ` +
       `It also describes ${more.length} common Philippine problems it cannot recognize from photos yet, from Philippine sources. ` +
