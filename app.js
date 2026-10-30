@@ -26,21 +26,29 @@
   // Cut-offs are chosen on the 2,692 validation field photos; every rate is reported on the 3,583 test field
   // photos (public datasets and GBIF snake plant / other-plant photos, not Philippine farms), neither used in
   // training, with the app's three views and squash-family answer. training/calibrate_app.py ->
-  // results/app_calibration.json, for the app's model v3-int8 (the paper's v1-study figures are in results/v1-study).
-  // Out of 10 answers in each band, how many were right (rounded down): 96.0% [95.0-96.8], 77.4% [74.4-80.2],
-  // 44.4% [41.3-47.5].
+  // results/app_calibration.json, for the app's model v4-int8 (the paper's v1-study figures are in results/v1-study;
+  // v3-int8's in models/release/v3/app_files).
+  // Out of 10 answers in each band, how many were right (rounded down): 96.5% [95.5-97.2], 76.6% [73.5-79.5],
+  // 43.8% [40.8-46.9].
   const RIGHT_IN_10 = { confident: 9, moderate: 7, unsure: 4 };
-  // The same when the user chooses the plant and only that plant's problems are ranked: 96.4%, 60.5%, 41.9%;
-  // with the weak-match rule below 95.9%, 67.4%, 40.2% (results/plant_chosen_weak_match.json).
-  // Choosing the plant raises overall accuracy on these photos from 77.5% to 90.7%.
-  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 4 };
+  // The same when the user chooses the plant and only that plant's problems are ranked: 96.7%, 58.6%, 35.4%;
+  // with the weak-match rule below 96.2%, 65.5%, 36.4% (results/plant_chosen_weak_match.json).
+  // Choosing the plant raises overall accuracy on these photos from 76.8% to 89.9%.
+  const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 3 };
   // Weak match: with a plant chosen, the app shares 100% among that plant's few problems, so fruit, insect damage
   // or another plant can reach "high confidence". When the model's raw probability for the chosen plant's best
   // problem is below this, the answer is shown as medium at most, with a warning (training/weak_match.py: on test
-  // photos 7.7% of real cases, still right 72.1%; 99.1% of photos of other plants with a crop chosen).
+  // photos 8.2% of real cases, still right 65.6%; 99.0% of photos of other plants with a crop chosen).
   const WEAK_MATCH = 0.05;
-  // Below this top probability the guess was right only 33.1% of the time (about 3 in 10), and the plant 45.1%.
-  const NOT_RECOGNIZED = 0.30;
+  // Below this top probability the guess was right only 31.4% of the time (about 3 in 10), and the plant 43.5%.
+  const NOT_RECOGNIZED = 0.25;
+  // Classes learned only from picked leaves photographed on plain cloth (v4: OLID I and the banana nutrient set,
+  // results/v4_data.json), never tested on field photos. On their plain test photos the bands were right 94.3%,
+  // 64.8% and 48.9% (results/app_calibration.json test_plain_v4_classes); field results may be lower.
+  const NOT_FIELD_TESTED = new Set(['ampalaya/downy-mildew', 'ampalaya/healthy', 'ampalaya/leaf-spot',
+    'ampalaya/leafhopper', 'ampalaya/nutrient-deficiency', 'banana/nutrient-deficiency', 'eggplant/epilachna-beetle',
+    'eggplant/flea-beetle', 'eggplant/leafhopper', 'eggplant/mite', 'eggplant/nutrient-deficiency',
+    'tomato/leaf-miner', 'tomato/nutrient-deficiency']);
   const OTHER_PLANT = 'other';
   const MAX_QUESTIONS = 4;
   // Photo checks on the 224x224 crop. Blur: at least 95% of artificially blurred crops score below 20, and
@@ -824,7 +832,7 @@
     el.spotsBtn.setAttribute('aria-expanded', String(showing));
   }
 
-  // Called by showResult: spots are offered for any result about a known plant, and spots of an older
+  // Called by showResult: spots are offered for disease and healthy results about a known plant, and spots of an older
   // square are hidden until they are found again.
   function renderSpotsBox(available) {
     el.spotsBox.hidden = !available;
@@ -1038,6 +1046,7 @@
   function kindOf(d) {
     if (d.healthy) return 'healthy';
     if (d.type.startsWith('Pest')) return 'pest';
+    if (d.type.startsWith('Disorder')) return 'disorder'; // nutrient deficiency, blossom end rot: not a disease
     return 'disease';
   }
 
@@ -1094,8 +1103,8 @@
   }
 
   const CHIP = {
-    confident: { healthy: 'No disease seen', disease: 'Disease found', pest: 'Pest found' },
-    moderate: { healthy: 'Probably healthy', disease: 'Possible disease', pest: 'Possible pest' },
+    confident: { healthy: 'No disease seen', disease: 'Disease found', pest: 'Pest found', disorder: 'Nutrient problem' },
+    moderate: { healthy: 'Probably healthy', disease: 'Possible disease', pest: 'Possible pest', disorder: 'Possible nutrient problem' },
   };
   const CONF_WORD = { confident: 'High confidence', moderate: 'Medium confidence', unsure: 'Low confidence' };
 
@@ -1192,7 +1201,8 @@
     renderOthers(ranked, outcome);
     renderMore(outcome, d);
     renderLeaves();
-    renderSpotsBox(!special && outcome !== 'unknown');
+    // The spots model learned disease spots only (PlantSeg), not insect damage or nutrient yellowing.
+    renderSpotsBox(!special && outcome !== 'unknown' && !['pest', 'disorder'].includes(kindOf(d)));
     renderFeedbackState();
 
     el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES || special;
@@ -1250,6 +1260,11 @@
         (plantLock ? '' : ' If the plant is wrong, choose the right one above.');
     }
     parts.push(make('p', null, text));
+    if (['confident', 'moderate', 'unsure'].includes(outcome) && NOT_FIELD_TESTED.has(labels[ranked[0].i]?.id)) {
+      parts.push(make('p', 'quality',
+        'LeafScan learned this one from photos of picked leaves on a plain cloth and has not yet been tested on photos ' +
+        'taken in gardens or farms, so it may be right less often there.'));
+    }
     el.message.className = `message ${outcome === 'confident' || outcome === 'moderate' ? outcome : 'unsure'}`;
     el.message.replaceChildren(...parts);
   }

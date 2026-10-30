@@ -1,23 +1,23 @@
 {
- "version": "v3-int8",
+ "version": "v4-int8",
  "source": "plant_disease_mnv3.onnx",
- "bytes": 4924493,
- "sha256": "5c03e6ac183f21328ece450b19a83b8fce8005a855c6b871a0bf003e00218df6",
+ "bytes": 4941250,
+ "sha256": "186c99d3cb9d633d7662b54de8051d7dc5058c15867c204f6c7236cd551dfa9d",
  "parts": [
   {
    "file": "part-000.bin",
    "bytes": 2097152,
-   "sha256": "e40af611f275519af556202ec252f3092376d753b558bbb13141d901b621a51b"
+   "sha256": "6825632e724587d0d28b0ffd6a5ff289deae63b888fe07c7298653088beb01ac"
   },
   {
    "file": "part-001.bin",
    "bytes": 2097152,
-   "sha256": "7e6342ae2cf4f03a793acbef6ad2189d3ba3cb29729dcfbf5547bd954c63e4da"
+   "sha256": "7c0d81e1aa80c57dd0dce5b0db72709d8f4940e9b23556884bb4d6fad9d76ce7"
   },
   {
    "file": "part-002.bin",
-   "bytes": 730189,
-   "sha256": "56bad03adf6f03851033e9c1aa6ad183770295fbbee94cd2ef06596ed4f2d7a5"
+   "bytes": 746946,
+   "sha256": "e8cd16289b0f5ee6dabe660f24fa7c52f15f44615179318f103e71da783d5235"
   }
  ],
  "runtime": {

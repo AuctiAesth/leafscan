@@ -358,14 +358,14 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 }
 .summary[data-kind="healthy"]::before { background: var(--healthy); }
 .summary[data-kind="disease"]::before { background: var(--disease); }
-.summary[data-kind="pest"]::before { background: var(--pest); }
+.summary[data-kind="pest"]::before, .summary[data-kind="disorder"]::before { background: var(--pest); }
 .summary[data-kind="unsure"]::before { background: var(--unsure); }
 
 .sum-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
 .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; letter-spacing: .01em; }
 .chip.healthy { background: var(--healthy-soft); color: var(--healthy); }
 .chip.disease { background: var(--disease-soft); color: var(--disease); }
-.chip.pest { background: var(--pest-soft); color: var(--pest); }
+.chip.pest, .chip.disorder { background: var(--pest-soft); color: var(--pest); }
 .chip.unsure { background: var(--unsure-soft); color: var(--unsure); }
 
 .plant-pick { min-width: 0; }
@@ -400,7 +400,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
   transform-origin: left center; transform: scaleX(0); transition: transform .35s ease-out;
 }
 .meter.disease span { background: var(--disease); }
-.meter.pest span { background: var(--pest); }
+.meter.pest span, .meter.disorder span { background: var(--pest); }
 .meter.unsure span { background: var(--unsure); }
 .conf-num { min-width: 3.4em; text-align: right; font-family: var(--serif); font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .conf-line { margin: 2px 0 0; min-height: 1.5em; font-size: .85rem; color: var(--muted); }

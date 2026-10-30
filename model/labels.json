@@ -1,5 +1,35 @@
 [
  {
+  "id": "ampalaya/downy-mildew",
+  "plant": "ampalaya",
+  "condition": "downy-mildew",
+  "healthy": false
+ },
+ {
+  "id": "ampalaya/healthy",
+  "plant": "ampalaya",
+  "condition": "healthy",
+  "healthy": true
+ },
+ {
+  "id": "ampalaya/leaf-spot",
+  "plant": "ampalaya",
+  "condition": "leaf-spot",
+  "healthy": false
+ },
+ {
+  "id": "ampalaya/leafhopper",
+  "plant": "ampalaya",
+  "condition": "leafhopper",
+  "healthy": false
+ },
+ {
+  "id": "ampalaya/nutrient-deficiency",
+  "plant": "ampalaya",
+  "condition": "nutrient-deficiency",
+  "healthy": false
+ },
+ {
   "id": "apple/black-rot",
   "plant": "apple",
   "condition": "black-rot",
@@ -64,6 +94,12 @@
   "plant": "banana",
   "condition": "healthy",
   "healthy": true
+ },
+ {
+  "id": "banana/nutrient-deficiency",
+  "plant": "banana",
+  "condition": "nutrient-deficiency",
+  "healthy": false
  },
  {
   "id": "banana/panama-disease",
@@ -396,10 +432,40 @@
   "healthy": false
  },
  {
+  "id": "eggplant/epilachna-beetle",
+  "plant": "eggplant",
+  "condition": "epilachna-beetle",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/flea-beetle",
+  "plant": "eggplant",
+  "condition": "flea-beetle",
+  "healthy": false
+ },
+ {
   "id": "eggplant/healthy",
   "plant": "eggplant",
   "condition": "healthy",
   "healthy": true
+ },
+ {
+  "id": "eggplant/leafhopper",
+  "plant": "eggplant",
+  "condition": "leafhopper",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/mite",
+  "plant": "eggplant",
+  "condition": "mite",
+  "healthy": false
+ },
+ {
+  "id": "eggplant/nutrient-deficiency",
+  "plant": "eggplant",
+  "condition": "nutrient-deficiency",
+  "healthy": false
  },
  {
   "id": "eggplant/phomopsis-fruit-rot",
@@ -804,6 +870,12 @@
   "healthy": false
  },
  {
+  "id": "tomato/leaf-miner",
+  "plant": "tomato",
+  "condition": "leaf-miner",
+  "healthy": false
+ },
+ {
   "id": "tomato/leaf-mold",
   "plant": "tomato",
   "condition": "leaf-mold",
@@ -813,6 +885,12 @@
   "id": "tomato/mosaic",
   "plant": "tomato",
   "condition": "mosaic",
+  "healthy": false
+ },
+ {
+  "id": "tomato/nutrient-deficiency",
+  "plant": "tomato",
+  "condition": "nutrient-deficiency",
   "healthy": false
  },
  {
