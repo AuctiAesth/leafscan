@@ -100,6 +100,7 @@
     studyBox: $('studyBox'), studyForm: $('studyForm'), studySave: $('studySave'), studyNote: $('studyNote'),
     studyLog: $('studyLog'), studyCount: $('studyCount'), studyExport: $('studyExport'), studyList: $('studyList'),
     studyExportNote: $('studyExportNote'), studyClear: $('studyClear'), studyToggle: $('studyToggle'),
+    studyCode: $('studyCode'), studyCodeText: $('studyCodeText'), studyCheck: $('studyCheck'),
     brandBtn: $('brandBtn'), navrow: $('navrow'), tabs: [...document.querySelectorAll('#navrow [data-view]')],
     intro: $('intro'), introFacts: $('introFacts'), historyCount: $('historyCount'), historyEmpty: $('historyEmpty'),
     plantFilter: $('plantFilter'), plantsLede: $('plantsLede'), plantsEmpty: $('plantsEmpty'),
@@ -1985,9 +1986,106 @@
     'garden or farm', 'background (natural / plain paper)', 'light (sun / shade / cloudy)', 'phone model', 'notes',
     'leafscan_result', 'leafscan_confidence', 'leafscan_plant_chosen_by_user', 'leafscan_model',
     'plant_given', 'leafscan_result_plant_given', 'leafscan_confidence_plant_given', 'leafscan_shortlist',
-    'guess_written', 'expert_saw_leafscan'];
-  const REMEMBERED = ['barangay', 'municipality', 'province', 'site', 'background', 'light', 'phone'];
+    'guess_written', 'expert_saw_leafscan',
+    'code', 'photo_set', 'site_code', 'crop_code', 'problem_code', 'plant_no', 'leaf_no', 'label_tier'];
+  const REMEMBERED = ['barangay', 'municipality', 'province', 'site', 'background', 'light', 'phone',
+    'photoSet', 'siteCode', 'crop', 'plantNo', 'leafNo'];
   let studySavedFor = null; // the photo whose entry has been saved, so it is not saved twice
+  let studyRestored = false; // remembered fields are put back once per page load
+
+  // Crop and problem pick lists (data/field_codes.json, shared with the printed Field ID Key from
+  // kb/make_field_key.py). Each photo gets the code CROP-PROBLEM-SITE-PLANT-LEAF, so photos from several members
+  // never clash and nobody types a code by hand.
+  let fieldCodes = null;
+  fetch('data/field_codes.json').then((r) => (r.ok ? r.json() : null)).then((c) => { fieldCodes = c; }).catch(() => {});
+
+  const cropOf = (code) => (fieldCodes && fieldCodes.crops.find((c) => c.code === code)) || null;
+  const problemsOf = (crop) => (crop ? [...crop.problems, ...fieldCodes.common] : []);
+  const moreById = (id) => (kb.more || []).find((m) => m.id === id);
+  const siteOk = (s) => /^[A-Z][0-9]{1,2}$/.test(s);
+
+  function problemName(p) {
+    if (p.id && p.id.endsWith('/healthy')) return 'Healthy';
+    const r = p.id && (byId.get(p.id) || moreById(p.id));
+    return r ? (r.name || r.en) : p.en;
+  }
+
+  function fillCropSelect() {
+    const f = el.studyForm.elements;
+    if (!fieldCodes || f.crop.options.length > 1) return;
+    for (const c of fieldCodes.crops) {
+      const h = kb.hosts[c.host] || {};
+      f.crop.append(new Option(`${c.code} · ${[h.fil, h.en].filter(Boolean).join(' / ')}`, c.code));
+    }
+  }
+
+  function fillProblemSelect() {
+    const f = el.studyForm.elements;
+    const crop = cropOf(f.crop.value);
+    const keep = f.problem.value;
+    f.problem.replaceChildren(new Option(crop ? '(choose)' : '(choose a crop)', ''));
+    for (const p of problemsOf(crop)) f.problem.append(new Option(`${p.code} · ${problemName(p)}`, p.code));
+    if ([...f.problem.options].some((o) => o.value === keep)) f.problem.value = keep;
+  }
+
+  function studyCode() {
+    const f = el.studyForm.elements;
+    const n = parseInt(f.plantNo.value, 10);
+    if (!f.crop.value || !f.problem.value || !siteOk(f.siteCode.value) || !(n >= 1 && n <= 99)) return '';
+    return [f.crop.value, f.problem.value, f.siteCode.value, `P${String(n).padStart(2, '0')}`, f.leafNo.value].join('-');
+  }
+
+  // The code being built, the problem's tier and the knowledge base's checks, so the labeller compares the leaf
+  // with the same cited description as the printed key.
+  function renderStudyCode() {
+    const f = el.studyForm.elements;
+    const crop = cropOf(f.crop.value);
+    el.studyCode.hidden = !crop;
+    if (!crop) return;
+    el.studyCodeText.textContent = studyCode() || 'choose a problem, a site code (letter + number, e.g. B2) and a plant no.';
+    const p = problemsOf(crop).find((x) => x.code === f.problem.value);
+    const lines = [];
+    if (p && p.tier) lines.push(`Tier ${p.tier}: ${fieldCodes.tiers[p.tier]}`);
+    const r = p && p.id && byId.get(p.id);
+    if (r && r.look_for && r.look_for.length) lines.push(`Check: ${r.look_for.join(' ')}`);
+    else if (p && p.id && moreById(p.id)) lines.push('LeafScan cannot recognize this one yet: see its description in the Field ID Key.');
+    el.studyCheck.replaceChildren(...lines.map((t) => make('p', null, t)));
+  }
+
+  el.studyForm.elements.crop.addEventListener('change', () => {
+    const f = el.studyForm.elements;
+    const crop = cropOf(f.crop.value);
+    fillProblemSelect();
+    if (crop) {
+      const h = kb.hosts[crop.host] || {};
+      f.plant.value = [h.fil, h.en].filter(Boolean).join(' / ');
+    }
+    renderStudyCode();
+  });
+  el.studyForm.elements.problem.addEventListener('change', () => {
+    const f = el.studyForm.elements;
+    const p = problemsOf(cropOf(f.crop.value)).find((x) => x.code === f.problem.value);
+    f.healthy.value = !p || p.code === 'UNK' ? '' : p.code === 'HLT' ? 'healthy' : 'sick';
+    f.guess.value = p && !['OTH', 'UNK'].includes(p.code) ? problemName(p) : '';
+    renderStudyCode();
+  });
+  el.studyForm.elements.siteCode.addEventListener('input', () => {
+    const f = el.studyForm.elements;
+    f.siteCode.value = f.siteCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    renderStudyCode();
+  });
+  for (const k of ['plantNo', 'leafNo', 'photoSet']) el.studyForm.elements[k].addEventListener('input', renderStudyCode);
+
+  // After a save: L0 (whole plant) -> L1 -> L2 -> L3 -> the next plant's L1.
+  function nextLeaf() {
+    const f = el.studyForm.elements;
+    const order = ['L0', 'L1', 'L2', 'L3'];
+    const i = order.indexOf(f.leafNo.value);
+    if (i < 3) { f.leafNo.value = order[i + 1]; return; }
+    f.leafNo.value = 'L1';
+    const n = parseInt(f.plantNo.value, 10);
+    if (n >= 1 && n < 99) f.plantNo.value = String(n + 1);
+  }
 
   const studyOn = () => { try { return localStorage.getItem(STUDY_KEY) === '1'; } catch { return false; } };
 
@@ -2045,11 +2143,18 @@
     const f = el.studyForm.elements;
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(STUDY_DEFAULTS_KEY)) || {}; } catch { saved = {}; }
-    for (const k of REMEMBERED) if (saved[k] && !f[k].value) f[k].value = saved[k];
+    fillCropSelect();
+    for (const k of REMEMBERED) if (saved[k] && (!studyRestored || !f[k].value)) f[k].value = saved[k];
+    if (!studyRestored) fillProblemSelect();
+    studyRestored = true;
     if (studySavedFor !== source.id) {
-      const h = current.outcome === 'uncovered' ? null : kb.hosts[current.d.host];
+      // With a crop chosen, the plant comes from the pick list and the problem is chosen afresh for every photo,
+      // never carried over and never taken from LeafScan's answer.
+      const crop = cropOf(f.crop.value);
+      const h = crop ? kb.hosts[crop.host] : current.outcome === 'uncovered' ? null : kb.hosts[current.d.host];
       f.plant.value = h ? [h.fil, h.en].filter(Boolean).join(' / ') : '';
-      f.healthy.value = current.d.healthy && current.outcome !== 'unknown' ? 'healthy' : 'sick';
+      f.healthy.value = crop ? '' : current.d.healthy && current.outcome !== 'unknown' ? 'healthy' : 'sick';
+      f.problem.value = '';
       f.guess.value = '';
       f.guessWhen.value = '';
       f.notes.value = '';
@@ -2057,6 +2162,7 @@
       el.studySave.textContent = 'Save to study log';
       el.studyNote.textContent = '';
     }
+    renderStudyCode();
   }
 
   el.studyForm.addEventListener('submit', async (e) => {
@@ -2064,12 +2170,22 @@
     if (!current || !source || studySavedFor === source.id) return;
     const f = el.studyForm.elements;
     const val = (k) => f[k].value.trim();
+    const code = studyCode();
+    if (f.crop.value && !code) {
+      el.studyNote.textContent = 'Choose the problem, a site code (letter + number, e.g. B2) and the plant no. first.';
+      return;
+    }
     try {
       localStorage.setItem(STUDY_DEFAULTS_KEY, JSON.stringify(Object.fromEntries(REMEMBERED.map((k) => [k, val(k)]))));
     } catch { /* optional */ }
     el.studySave.disabled = true;
     try {
       const entries = await studyAll();
+      if (code && entries.some((x) => x.code === code)) {
+        el.studySave.disabled = false;
+        el.studyNote.textContent = `${code} is already in the study log: check the plant no. and leaf.`;
+        return;
+      }
       const plantEn = (val('plant').split('/').pop() || 'leaf').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'leaf';
       const n = entries.filter((x) => x.photoFile.startsWith(plantEn + '_')).length + 1;
       const now = new Date();
@@ -2077,7 +2193,7 @@
       const leaf = leaves.find((l) => l.id === source.id);
       const entry = {
         created: now.getTime(),
-        photoFile: `${plantEn}_${pad(n, 3)}.jpg`,
+        photoFile: code ? `${code}.jpg` : `${plantEn}_${pad(n, 3)}.jpg`,
         date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
         barangay: val('barangay'), municipality: val('municipality'), province: val('province'),
         plant: val('plant'), healthy: f.healthy.value, guess: val('guess'), confirmedBy: '', confirmedDisease: '',
@@ -2093,11 +2209,20 @@
         plantGiven: given, resultPlantGiven: answer ? answer.id : '', confidencePlantGiven: answer ? answer.p : '',
         shortlist: (current.shortlist || []).map((s) => labels[s.i].id).join('; '),
         guessWhen: f.guessWhen ? f.guessWhen.value : '', expertSaw: '',
+        code, photoSet: f.photoSet.value, siteCode: code ? f.siteCode.value : '', crop: code ? f.crop.value : '',
+        problem: code ? f.problem.value : '', plantNo: code ? f.plantNo.value : '', leafNo: code ? f.leafNo.value : '',
+        tier: code ? (problemsOf(cropOf(f.crop.value)).find((x) => x.code === f.problem.value) || {}).tier || '' : '',
       });
       await studyTx('readwrite', (s) => s.add(entry));
       studySavedFor = source.id;
       el.studySave.textContent = 'Saved';
       el.studyNote.textContent = `Saved as ${entry.photoFile} (${entries.length + 1} in the study log).`;
+      if (code) {
+        nextLeaf();
+        try {
+          localStorage.setItem(STUDY_DEFAULTS_KEY, JSON.stringify(Object.fromEntries(REMEMBERED.map((k) => [k, val(k)]))));
+        } catch { /* optional */ }
+      }
       renderStudyLog();
     } catch (err) {
       console.error(err);
@@ -2198,12 +2323,18 @@
     const rows = entries.map((x) => [x.photoFile, x.date, x.barangay, x.municipality, x.province, x.plant, x.healthy,
       x.guess, x.confirmedBy, x.confirmedDisease, x.site, x.background, x.light, x.phone, x.notes,
       x.result, x.confidence, x.plantChosen, x.model, x.plantGiven || '', x.resultPlantGiven || '',
-      x.confidencePlantGiven || '', x.shortlist || '', x.guessWhen || '', x.expertSaw || '']);
+      x.confidencePlantGiven || '', x.shortlist || '', x.guessWhen || '', x.expertSaw || '',
+      x.code || '', x.photoSet || '', x.siteCode || '', x.crop || '', x.problem || '', x.plantNo || '', x.leafNo || '',
+      x.tier || '']);
     const csv = [STUDY_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
     const files = [{ name: 'photo_log.csv', data: new TextEncoder().encode('﻿' + csv) }];
     for (const x of entries) files.push({ name: `photos/${x.photoFile}`, data: new Uint8Array(await x.photo.arrayBuffer()) });
-    const stamp = new Date().toISOString().slice(0, 10);
-    const zip = new File([zipStore(files)], `leafscan-study-${stamp}.zip`, { type: 'application/zip' });
+    const d = new Date();
+    const stamp = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map((x) => String(x).padStart(2, '0')).join('-');
+    // The member's letter (from the site codes) goes in the file name, so ZIPs from several phones don't clash.
+    const letters = entries.map((x) => (x.siteCode || '')[0]).filter(Boolean);
+    const member = letters.sort((a, b) => letters.filter((l) => l === b).length - letters.filter((l) => l === a).length)[0];
+    const zip = new File([zipStore(files)], `leafscan-study-${member ? member + '-' : ''}${stamp}.zip`, { type: 'application/zip' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [zip] })) {
         await navigator.share({ files: [zip], title: 'LeafScan study log' });

@@ -1,0 +1,72 @@
+{
+ "about": "Crop and problem codes for the team's field photos (CROP-PROBLEM-SITE-PLANT-LEAF). Used by Study mode in app.js and by kb/make_field_key.py. 'id' is the knowledge-base record whose cited description the labeller checks against; null means LeafScan has no cited description. Tiers are the team's guidance on how reliable a by-eye label is, not part of the sources.",
+ "tiers": {
+  "A": "Sign visible: the insect, mite, powder or pustules themselves can be seen. Label it only if you see the sign.",
+  "B": "Pattern: the spots or damage match a published description, but look-alikes exist. Two members must agree.",
+  "C": "Cause not visible: viruses, nutrient shortages and wilts cannot be confirmed by eye. Label the symptom; it needs an expert or is grouped."
+ },
+ "crops": [
+  {"code": "AMP", "host": "ampalaya", "problems": [
+   {"code": "HLT", "id": "ampalaya/healthy"},
+   {"code": "DMD", "id": "ampalaya/downy-mildew", "tier": "B"},
+   {"code": "LSP", "id": "ampalaya/leaf-spot", "tier": "B"},
+   {"code": "LHP", "id": "ampalaya/leafhopper", "tier": "A"},
+   {"code": "NUT", "id": "ampalaya/nutrient-deficiency", "tier": "C"},
+   {"code": "NMK", "id": "ampalaya/namamarako", "tier": "C"},
+   {"code": "BWL", "id": "ph/bacterial-wilt", "tier": "C"}]},
+  {"code": "TAL", "host": "eggplant", "problems": [
+   {"code": "HLT", "id": "eggplant/healthy"},
+   {"code": "EPI", "id": "eggplant/epilachna-beetle", "tier": "A"},
+   {"code": "FLB", "id": "eggplant/flea-beetle", "tier": "A"},
+   {"code": "LHP", "id": "eggplant/leafhopper", "tier": "A"},
+   {"code": "MIT", "id": "eggplant/mite", "tier": "A"},
+   {"code": "CER", "id": "eggplant/cercospora-leaf-spot", "tier": "B"},
+   {"code": "PHO", "id": "eggplant/phomopsis-fruit-rot", "tier": "B"},
+   {"code": "PHB", "id": "eggplant/phytophthora-blight", "tier": "B"},
+   {"code": "NUT", "id": "eggplant/nutrient-deficiency", "tier": "C"},
+   {"code": "BWL", "id": "ph/bacterial-wilt", "tier": "C"}]},
+  {"code": "KAM", "host": "tomato", "problems": [
+   {"code": "HLT", "id": "tomato/healthy"},
+   {"code": "LMN", "id": "tomato/leaf-miner", "tier": "A"},
+   {"code": "MIT", "id": "tomato/spider-mite", "tier": "A"},
+   {"code": "EBL", "id": "tomato/early-blight", "tier": "B"},
+   {"code": "LBL", "id": "tomato/late-blight", "tier": "B"},
+   {"code": "SEP", "id": "tomato/septoria-leaf-spot", "tier": "B"},
+   {"code": "BAC", "id": "tomato/bacterial-spot", "tier": "B"},
+   {"code": "LMO", "id": "tomato/leaf-mold", "tier": "B"},
+   {"code": "TGS", "id": "tomato/target-spot", "tier": "B"},
+   {"code": "LCL", "id": "tomato/yellow-leaf-curl", "tier": "C"},
+   {"code": "MOS", "id": "tomato/mosaic", "tier": "C"},
+   {"code": "NUT", "id": "tomato/nutrient-deficiency", "tier": "C"},
+   {"code": "BWL", "id": "ph/bacterial-wilt", "tier": "C"}]},
+  {"code": "KAL", "host": "squash", "problems": [
+   {"code": "HLT", "id": "squash/healthy"},
+   {"code": "PWM", "id": "squash/powdery-mildew", "tier": "A"},
+   {"code": "DMD", "id": "zucchini/downy-mildew", "tier": "B"},
+   {"code": "LCM", "id": "squash/leaf-curl-mosaic", "tier": "C"},
+   {"code": "YMV", "id": "zucchini/yellow-mosaic", "tier": "C"},
+   {"code": "WLT", "id": "zucchini/bacterial-wilt", "tier": "C"},
+   {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]},
+  {"code": "PAL", "host": "rice", "problems": [
+   {"code": "HLT", "id": "rice/healthy"},
+   {"code": "BLS", "id": "rice/blast", "tier": "B"},
+   {"code": "BSP", "id": "rice/brown-spot", "tier": "B"},
+   {"code": "BLB", "id": "rice/bacterial-leaf-blight", "tier": "B"},
+   {"code": "SHB", "id": "rice/sheath-blight", "tier": "B"},
+   {"code": "TUN", "id": "rice/tungro", "tier": "C"},
+   {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]},
+  {"code": "MAI", "host": "corn", "problems": [
+   {"code": "HLT", "id": "corn/healthy"},
+   {"code": "RST", "id": "corn/rust", "tier": "A"},
+   {"code": "SMT", "id": "corn/smut", "tier": "A"},
+   {"code": "GLS", "id": "corn/gray-leaf-spot", "tier": "B"},
+   {"code": "NLB", "id": "corn/northern-leaf-blight", "tier": "B"},
+   {"code": "DMD", "id": "corn/downy-mildew", "tier": "B"},
+   {"code": "BSB", "id": "corn/banded-leaf-sheath-blight", "tier": "B"},
+   {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]}
+ ],
+ "common": [
+  {"code": "OTH", "en": "Other problem (describe it in Notes)"},
+  {"code": "UNK", "en": "Not sure (photo is kept but not used for training)"}
+ ]
+}

@@ -725,6 +725,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 }
 .study-form .wide { grid-column: 1 / -1; }
 .study-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.study-code { padding: 10px 12px; border-radius: 10px; background: var(--ground); border: 1px solid var(--rule); }
+.study-code-line { font-size: .9rem; overflow-wrap: anywhere; }
+.study-code-line b { font-family: ui-monospace, Consolas, monospace; letter-spacing: .3px; }
+.study-code p { margin: 6px 0 0; color: var(--muted); }
 @media (max-width: 420px) { .study-form { grid-template-columns: 1fr; } }
 
 .study-log { margin-top: 30px; }
