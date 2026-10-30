@@ -179,10 +179,6 @@
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z" fill="currentColor"/></svg>
             Show to a technician
           </button>
-          <label class="switch">
-            <input type="checkbox" id="autoCheck">
-            <span>Check again by itself when I let go</span>
-          </label>
         </div>
       </section>
 
@@ -228,14 +224,17 @@
           </section>
         </div>
 
-        <h3 id="othersTitle">Other possibilities</h3>
-        <ol id="resultOthers" class="others"></ol>
+        <!-- Secondary sections are folded: the answer and what to do come first, the rest is one tap away. -->
+        <details id="othersFold" class="fold">
+          <summary><h3 id="othersTitle">Other possibilities</h3></summary>
+          <ol id="resultOthers" class="others"></ol>
+        </details>
 
-        <section id="moreBox" class="more-box" hidden aria-labelledby="moreTitle">
-          <h3 id="moreTitle">Also common in the Philippines</h3>
+        <details id="moreBox" class="fold more-box" hidden>
+          <summary><h3 id="moreTitle">Also common in the Philippines</h3></summary>
           <p class="small muted">LeafScan cannot recognize these from a photo yet. Compare the signs, and ask a plant clinic if they match.</p>
           <div id="moreList" class="more-list"></div>
-        </section>
+        </details>
 
         <section class="study" id="studyBox" hidden aria-labelledby="studyTitle">
           <h3 id="studyTitle">Study log</h3>
@@ -272,14 +271,14 @@
           <p id="feedbackNote" class="small" role="status"></p>
         </div>
 
-        <div id="sourcesBox">
-          <h3>Expert sources</h3>
+        <details id="sourcesBox" class="fold">
+          <summary><h3>Expert sources</h3></summary>
           <ul id="resultSources" class="sources"></ul>
           <p id="resultNote" class="small muted"></p>
-        </div>
+        </details>
 
-        <div class="help-card">
-          <h3>Still not sure, or many plants are sick?</h3>
+        <details id="helpCard" class="help-card fold">
+          <summary><h3>Still not sure, or many plants are sick?</h3></summary>
           <p>Ask a plant clinic for a second opinion:</p>
           <ul class="help-list">
             <li><b>Bureau of Plant Industry (BPI), Crop Pest Management Division</b>, Quezon City: diagnoses plant samples free of charge for farmers and students. Bring freshly collected sick plants (and whole insects) and fill in their diagnosis form.
@@ -290,7 +289,7 @@
             <li>An <b>agriculture teacher</b>, or the agriculture college of a state university near you.</li>
           </ul>
           <p class="small muted">To send a sample: wrap several fresh sick leaves (and the stem if it is affected) in dry paper, put them in a plastic bag, and send them the same day. Include photos and this result.</p>
-        </div>
+        </details>
         <p class="disclaimer">This is a research prototype and can be wrong. Before you spray or remove plants, confirm the diagnosis with an agricultural technician or a plant clinic, and use only products registered with the Fertilizer and Pesticide Authority (FPA), or with DA-BAFS for organic and biological products, following the label.</p>
       </section>
     </section>
@@ -414,6 +413,11 @@
         </div>
         <ul id="wordWarnings" class="small muted word-warnings"></ul>
         <p id="wordsSources" class="small muted words-sources"></p>
+      </section>
+
+      <section class="guide-sec">
+        <h2>Settings</h2>
+        <label class="switch"><input type="checkbox" id="autoCheck"><span>Check the leaf again by itself when I let go of the photo</span></label>
       </section>
 
       <section class="guide-sec">

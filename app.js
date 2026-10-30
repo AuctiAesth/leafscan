@@ -67,6 +67,7 @@
     techBtn: $('techBtn'), autoCheck: $('autoCheck'),
     spotsBox: $('spotsBox'), spotsBtn: $('spotsBtn'), spotsFig: $('spotsFig'), spotsCanvas: $('spotsCanvas'),
     spotsText: $('spotsText'), spotsNote: $('spotsNote'), shortlist: $('shortlist'),
+    othersFold: $('othersFold'), helpCard: $('helpCard'),
     detailsCard: $('detailsCard'), details: $('resultDetails'), symptomsTitle: $('symptomsTitle'), symptoms: $('resultSymptoms'),
     lookTitle: $('lookTitle'), look: $('resultLook'), manageTitle: $('manageTitle'), manage: $('resultManage'),
     chemNote: $('chemNote'), sourcesBox: $('sourcesBox'), sources: $('resultSources'), note: $('resultNote'),
@@ -284,7 +285,7 @@
       el.progress.classList.add('done');
       el.cameraBtn.disabled = false;
       el.uploadBtn.disabled = false;
-      setStatus(source ? '' : 'Ready. Take a photo of one leaf, or choose one from your gallery.');
+      setStatus(''); // the empty photo box already says what to do
       if (source) analyze();
       registerOffline();
     } catch (err) {
@@ -736,6 +737,7 @@
   function setChecking(on) {
     el.checkBtn.disabled = on;
     el.checkBtn.textContent = on ? 'Checking…' : 'Check this leaf';
+    el.stage.classList.toggle('checking', on); // a scan line sweeps the square while the model runs
   }
 
   async function analyze() {
@@ -766,6 +768,7 @@
       checked = v;
       showResult();
       saveHistory();
+      reveal();
       if (spotsOn) showSpots();
     } catch (err) {
       console.error(err);
@@ -903,6 +906,15 @@
     if (spotsViews.showing === 'plain') ctx.drawImage(spotsViews.plain, 0, 0);
     else ctx.putImageData(spotsViews.marked, 0, 0);
   });
+
+  // Each new check eases the result in (styles.css, .reveal); changing the plant or answering questions does not.
+  function reveal() {
+    for (const card of [el.summaryCard, el.detailsCard]) {
+      card.classList.remove('reveal');
+      void card.offsetWidth; // restart the animation
+      card.classList.add('reveal');
+    }
+  }
 
   function combine() {
     if (leaves.length === 1) return leaves[0].probs;
@@ -1157,8 +1169,9 @@
     }
     if (!special) shown = { i: top.i, p: top.p, family: top.family };
 
+    renderShortlist(shortlist, outcome); // first: the message leaves out alternatives the list already shows
     renderMessage(outcome, d, ranked, all);
-    renderShortlist(shortlist, outcome);
+    el.helpCard.open = doubtful; // where to get a second opinion, open only when LeafScan is unsure
     const detailed = outcome === 'confident' || outcome === 'moderate';
     el.details.hidden = !detailed;
     el.sourcesBox.hidden = !detailed;
@@ -1212,7 +1225,7 @@
     } else if (outcome === 'moderate') {
       const alt = ranked[1] ? present(ranked[1]) : null;
       text = `Results this sure${among} were right about ${rate.moderate} in 10 times.` +
-        (alt ? ` It could also be ${shortName(alt, d)}.` : '') +
+        (alt && el.shortlist.hidden ? ` It could also be ${shortName(alt, d)}.` : '') +
         (plantLock ? ' Answer the questions below, or add another leaf.'
           : ' Answer the questions below, add another leaf, or choose the plant above if it is wrong.');
     } else {
@@ -1435,14 +1448,17 @@
     el.shortlist.hidden = !show;
     if (!show) return;
     const rate = Math.round((shortlistCuts.test_coverage || 90) / 10);
-    el.shortlist.replaceChildren(make('b', null, 'Most likely one of these: '), names.join(' · '),
-      make('span', 'muted', ` (on test photos, lists like this held the right answer about ${rate} in 10 times)`));
+    el.shortlist.replaceChildren(make('span', 'sl-label', 'Most likely one of these'),
+      ...names.map((n) => make('span', 'sl-chip', n)),
+      make('span', 'sl-note', `On test photos, the right answer was in lists like this about ${rate} in 10 times.`));
   }
 
   function renderOthers(ranked, outcome) {
     const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
-    el.othersTitle.hidden = el.others.hidden = special;
-    if (special) return;
+    // Folded, and left out when the shortlist above already names the alternatives.
+    el.othersFold.hidden = special || !el.shortlist.hidden;
+    if (el.othersFold.hidden) return;
+    el.othersFold.open = outcome === 'unknown';
     el.othersTitle.textContent = outcome === 'unknown' ? 'Closest matches' : 'Other possibilities';
     const list = outcome === 'unknown' ? ranked.slice(0, 3) : ranked.slice(1, 4);
     el.others.replaceChildren(...list.map((x) => {
