@@ -5,7 +5,7 @@
 //   leafscan-lesion-<ver>   the diseased-spots model's parts, downloaded only when asked; same rules
 // The page registers this worker only after the model has loaded, so these files come from the browser's
 // own HTTP cache rather than being downloaded a second time.
-const APP_CACHE = 'leafscan-app-22';
+const APP_CACHE = 'leafscan-app-23';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',
@@ -22,6 +22,7 @@ const APP_FILES = [
   'model/labels.json',
   'model/model.json',
   'model/lesion.json',
+  'model/second.json',
   'model/shortlist.json',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -33,7 +34,7 @@ const RUNTIME_FILES = [
   'vendor/ort.wasm.min.js',
   'vendor/ort-wasm-simd-threaded.mjs',
 ];
-const KEEP = (key) => key === APP_CACHE || key === RUNTIME_CACHE || key.startsWith('leafscan-model-') || key.startsWith('leafscan-lesion-');
+const KEEP = (key) => key === APP_CACHE || key === RUNTIME_CACHE || key.startsWith('leafscan-model-') || key.startsWith('leafscan-lesion-') || key.startsWith('leafscan-second-');
 const MODEL_PART = /\/model\/[^/]+\/part-\d+\.bin$/;
 const CACHE_FIRST = /\.(wasm|mjs|png|svg|woff2)$|\/vendor\//;
 

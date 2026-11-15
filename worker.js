@@ -8,6 +8,7 @@ ort.env.wasm.numThreads = 1;
 const SIZE = 224;
 let session = null;
 let lesion = null; // the lesion-highlight model, loaded only when someone asks to see diseased spots
+let second = null; // the second-opinion model: the same network trained again with another random seed
 
 self.onmessage = async (e) => {
   const msg = e.data;
@@ -28,6 +29,22 @@ self.onmessage = async (e) => {
     try {
       lesion = await ort.InferenceSession.create(msg.bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
       self.postMessage({ type: 'lesion-ready', id: msg.id });
+    } catch (err) {
+      self.postMessage({ type: 'error', id: msg.id, message: String(err && err.message || err) });
+    }
+  } else if (msg.type === 'second-load') {
+    try {
+      second = await ort.InferenceSession.create(msg.bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      self.postMessage({ type: 'second-ready', id: msg.id });
+    } catch (err) {
+      self.postMessage({ type: 'error', id: msg.id, message: String(err && err.message || err) });
+    }
+  } else if (msg.type === 'second-run') {
+    try {
+      const t0 = performance.now();
+      const out = await second.run({ image: new ort.Tensor('float32', msg.data, [1, 3, SIZE, SIZE]) });
+      const probs = Float32Array.from(out.probabilities.data);
+      self.postMessage({ type: 'result', id: msg.id, probs, ms: performance.now() - t0 }, [probs.buffer]);
     } catch (err) {
       self.postMessage({ type: 'error', id: msg.id, message: String(err && err.message || err) });
     }

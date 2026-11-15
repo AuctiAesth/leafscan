@@ -35,6 +35,22 @@
   // with the weak-match rule below 96.2%, 65.5%, 36.4% (results/plant_chosen_weak_match.json).
   // Choosing the plant raises overall accuracy on these photos from 76.8% to 89.9%.
   const RIGHT_IN_10_PLANT = { confident: 9, moderate: 6, unsure: 3 };
+  // Once the second-opinion model has answered (see "Second opinion" below), the rates are those of the test
+  // photos where the two models agreed or disagreed (training/self_checks.py -> results/self_checks.json
+  // "app_rates", both models 8-bit, rounded down). They disagreed on 15.9% of the photos.
+  //   No plant chosen, agree: 96.7% (1,742 photos), 81.4% (689), 65.9% (413; answers shown as "not sure", so at
+  //   or above the "Not recognized" cut-off). Disagree: confident and moderate together 44.9% (107: only 13 of
+  //   them confident, too few for a rate of their own), not sure 26.2% (237).
+  //   Plant chosen, agree: 97.4% (2,874), 73.8% (419), 51.0% (51). Disagree: confident and moderate together
+  //   41.9% (160: 25 confident), not sure 25.3% (79).
+  const RIGHT_IN_10_SECOND = {
+    agree: { confident: 9, moderate: 8, unsure: 6 },
+    disagree: { confident: 4, moderate: 4, unsure: 2 },
+  };
+  const RIGHT_IN_10_SECOND_PLANT = {
+    agree: { confident: 9, moderate: 7, unsure: 5 },
+    disagree: { confident: 4, moderate: 4, unsure: 2 },
+  };
   // Weak match: with a plant chosen, the app shares 100% among that plant's few problems, so fruit, insect damage
   // or another plant can reach "high confidence". When the model's raw probability for the chosen plant's best
   // problem is below this, the answer is shown as medium at most, with a warning (training/weak_match.py: on test
@@ -303,6 +319,7 @@
       setStatus(''); // the empty photo box already says what to do
       if (source) analyze();
       registerOffline();
+      loadSecond();
     } catch (err) {
       console.error(err);
       setStatus(total
@@ -335,6 +352,8 @@
           resolve({
             where: 'worker',
             run(data) { return ask({ type: 'run', data }, [data.buffer]); },
+            secondLoad(bytes) { return ask({ type: 'second-load', bytes }, [bytes.buffer]); },
+            secondRun(data) { return ask({ type: 'second-run', data }, [data.buffer]); },
             lesionLoad(bytes) { return ask({ type: 'lesion-load', bytes }, [bytes.buffer]); },
             lesionRun(data, size) { return ask({ type: 'lesion-run', data, size }, [data.buffer]); },
           });
@@ -346,7 +365,7 @@
           if (!p) return;
           if (msg.type === 'result') p.res({ probs: msg.probs, ms: msg.ms });
           else if (msg.type === 'error') p.rej(new Error(msg.message));
-          else p.res(msg); // lesion-ready, or a lesion map { mask, ms }
+          else p.res(msg); // lesion-ready, second-ready, or a lesion map { mask, ms }
         }
       };
       // Transferred (not copied) when the parts are cached, so the model sits in memory only once.
@@ -363,8 +382,17 @@
     const tensor = (data) => new ort.Tensor('float32', data, [1, 3, SIZE, SIZE]);
     await session.run({ image: tensor(new Float32Array(3 * SIZE * SIZE)) }); // warm-up
     let lesion = null;
+    let second = null;
     return {
       where: 'page',
+      async secondLoad(bytes) {
+        second = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      },
+      async secondRun(data) {
+        const t0 = performance.now();
+        const out = await second.run({ image: tensor(data) });
+        return { probs: Float32Array.from(out.probabilities.data), ms: performance.now() - t0 };
+      },
       async run(data) {
         const t0 = performance.now();
         const out = await session.run({ image: tensor(data) });
@@ -767,7 +795,8 @@
       const canvas = cropTo224(v);
       const quality = checkQuality(canvas);
       let probs = null, ms = 0;
-      for (const view of views(v, canvas)) {
+      const shots3 = views(v, canvas);
+      for (const view of shots3) {
         const r = await runner.run(toCHW(view));
         ms += r.ms;
         if (!probs) probs = Float32Array.from(r.probs);
@@ -778,13 +807,14 @@
       lastMs = ms;
       const leaf = leaves.find((l) => l.id === v.id);
       const shots = { thumb: thumbnail(canvas, 88), crop: canvas.toDataURL('image/jpeg', 0.85) };
-      if (leaf) Object.assign(leaf, { probs, quality }, shots);
-      else leaves.push({ id: v.id, probs, quality, ...shots });
+      if (leaf) Object.assign(leaf, { probs, probs2: null, quality }, shots);
+      else leaves.push({ id: v.id, probs, probs2: null, quality, ...shots });
       checked = v;
       showResult();
       saveHistory();
       reveal();
       if (spotsOn) showSpots();
+      secondCheck(v, shots3); // not awaited: the answer is already on screen
     } catch (err) {
       console.error(err);
       setStatus('Something went wrong while checking. Please try another photo.');
@@ -794,6 +824,64 @@
       updateStale();
       if (again && isStale()) analyze();
     }
+  }
+
+  // ---------- Second opinion ----------
+
+  // The same network trained a second time with another random seed (models/v4b_s7_mnv3.pt, 8-bit like the first)
+  // looks at the same three views after the answer is shown. It never changes the answer: it only says whether it
+  // agrees, and the "right about N in 10" figures then come from the test photos where the two agreed or disagreed
+  // (training/self_checks.py, results/self_checks.json). It downloads in the background after the first model
+  // works; until it is ready, or if it fails, the app behaves as before.
+  const SECOND_INFO_URL = 'model/second.json';
+  const SECOND_CACHE_PREFIX = 'leafscan-second-';
+  let secondReady = false;
+  let secondVersion = '';
+
+  async function loadSecond() {
+    if (secondReady || !runner || !runner.secondLoad) return;
+    try {
+      const info = await (await fetch(SECOND_INFO_URL, { cache: 'no-cache' })).json();
+      const { bytes } = await loadModelBytes(info, () => {}, SECOND_CACHE_PREFIX);
+      await runner.secondLoad(bytes);
+      secondVersion = info.version;
+      secondReady = true;
+      const v = checked;
+      if (v && source && source.id === v.id) secondCheck(v, views(v, cropTo224(v)));
+    } catch (err) {
+      console.warn('Second-opinion model not available', err);
+    }
+  }
+
+  async function secondCheck(v, shots) {
+    if (!secondReady) return;
+    try {
+      let probs = null;
+      for (const shot of shots) {
+        const r = await runner.secondRun(toCHW(shot));
+        if (!probs) probs = Float32Array.from(r.probs);
+        else r.probs.forEach((x, i) => { probs[i] += x; });
+      }
+      probs = probs.map((x) => x / 3);
+      const leaf = leaves.find((l) => l.id === v.id);
+      if (!leaf || checked !== v || !current) return; // the square moved or another photo came meanwhile
+      leaf.probs2 = probs;
+      current.second = secondOpinion();
+      if (current.second) renderMessage(current.outcome, current.d, current.ranked, current.all);
+    } catch (err) {
+      console.warn('Second-opinion check failed', err);
+    }
+  }
+
+  // The second model's answer for the same leaves, ranked the same way (plant choice, squash-family answer).
+  function secondOpinion() {
+    if (!current || !['confident', 'moderate', 'unsure'].includes(current.outcome)) return null;
+    if (!leaves.length || leaves.some((l) => !l.probs2)) return null;
+    const top = current.top;
+    const top2 = ranking(plantLock, combine('probs2')).ranked[0];
+    const slug = (x) => keyOf(x.i).split('/')[1];
+    const agree = top2.i === top.i || (!!top.family && !!top2.family && slug(top) === slug(top2));
+    return { agree, top: top2, d: present(top2) };
   }
 
   // ---------- Diseased spots ----------
@@ -833,8 +921,8 @@
     el.spotsBtn.setAttribute('aria-expanded', String(showing));
   }
 
-  // Called by showResult: spots are offered for disease and healthy results about a known plant, and spots of an older
-  // square are hidden until they are found again.
+  // Called by showResult: spots are offered for disease results about a known plant, and spots of an older square
+  // are hidden until they are found again.
   function renderSpotsBox(available) {
     el.spotsBox.hidden = !available;
     if (!available || squareKey(checked) !== spotsKey) el.spotsFig.hidden = true;
@@ -931,10 +1019,10 @@
     }
   }
 
-  function combine() {
-    if (leaves.length === 1) return leaves[0].probs;
-    const avg = new Float32Array(leaves[0].probs.length);
-    for (const l of leaves) l.probs.forEach((p, i) => { avg[i] += p / leaves.length; });
+  function combine(key = 'probs') {
+    if (leaves.length === 1) return leaves[0][key];
+    const avg = new Float32Array(leaves[0][key].length);
+    for (const l of leaves) l[key].forEach((p, i) => { avg[i] += p / leaves.length; });
     return avg;
   }
 
@@ -953,8 +1041,8 @@
   // All classes ranked, and the ranking shown: when the user chose the plant, only that plant's classes (and
   // its group's), renormalized so they add up to 100%. A group member's disease counts as the chosen plant's
   // class of the same name (zucchini powdery mildew is squash powdery mildew when squash is chosen).
-  function ranking(lock = plantLock) {
-    const all = rank(combine());
+  function ranking(lock = plantLock, probs = combine()) {
+    const all = rank(probs);
     if (!lock || lock === OTHER_PLANT) return { ranked: familyMerge(all), all };
     const mine = new Map();
     for (const { p, i } of all) {
@@ -1133,7 +1221,8 @@
     const special = outcome === 'uncovered' || outcome === 'healthy-only' || outcome === 'other';
     const doubtful = special || outcome === 'unsure' || outcome === 'unknown';
     const shortlist = !plantLock && !special ? shortlistFor(all) : [];
-    current = { ranked, all, top, d, band, outcome, shortlist, weakMatch };
+    current = { ranked, all, top, d, band, outcome, shortlist, weakMatch, second: null };
+    current.second = secondOpinion();
 
     el.summaryCard.hidden = false;
     el.detailsCard.hidden = false;
@@ -1202,8 +1291,10 @@
     renderOthers(ranked, outcome);
     renderMore(outcome, d);
     renderLeaves();
-    // The spots model learned disease spots only (PlantSeg), not insect damage or nutrient yellowing.
-    renderSpotsBox(!special && outcome !== 'unknown' && !['pest', 'disorder'].includes(kindOf(d)));
+    // The spots model learned disease spots only (PlantSeg), not insect damage or nutrient yellowing. It never saw a
+    // healthy leaf either: on test photos of healthy leaves it marked a median 5.1% of the square, and more than 2% on
+    // 74% of them (training/self_checks.py), so spots are not offered when the answer is "healthy".
+    renderSpotsBox(!special && outcome !== 'unknown' && kindOf(d) === 'disease');
     renderFeedbackState();
 
     el.addLeafBtn.hidden = leaves.length >= MAX_LEAVES || special;
@@ -1233,7 +1324,19 @@
       parts.push(make('p', 'quality',
         'Cucumber, squash and zucchini leaves look alike, so LeafScan names the problem for the whole squash family. Choose your plant above to narrow it down.'));
     }
-    const rate = plantLock ? RIGHT_IN_10_PLANT : RIGHT_IN_10;
+    // The second model's verdict, when it has answered for every leaf: the rates below are then those measured
+    // where the two models agreed or disagreed.
+    const second = current.second;
+    const differs = !!second && !second.agree;
+    const rate = second
+      ? (plantLock ? RIGHT_IN_10_SECOND_PLANT : RIGHT_IN_10_SECOND)[second.agree ? 'agree' : 'disagree']
+      : (plantLock ? RIGHT_IN_10_PLANT : RIGHT_IN_10);
+    const agreed = second && second.agree ? 'A second copy of the model, trained separately, gave the same answer. ' : '';
+    if (differs) {
+      parts.push(make('p', 'quality',
+        `A second copy of the model, trained separately, reads this as ${shortName(second.d, d)}. ` +
+        'When the two disagree, the answer is right much less often.'));
+    }
     const among = plantLock ? ` among ${d.plant.toLowerCase()} problems` : '';
     let text;
     if (outcome === 'other') {
@@ -1245,18 +1348,25 @@
       text = `LeafScan has learned only healthy ${d.plant.toLowerCase()} leaves, so it cannot check them for diseases. Ask a plant clinic or an agriculture teacher (see "Still not sure" below).`;
     } else if (outcome === 'unknown') {
       text = 'This may not be a leaf, or it may be a plant or problem LeafScan does not know. When LeafScan is this unsure, its guess was right only about 3 in 10 times. Move the square onto one leaf, or choose the plant above if LeafScan knows it.';
+    } else if (outcome === 'confident' && differs) {
+      text = `On test photos where the two disagreed, answers like this${among} were right about ${rate.confident} in 10 times. ` +
+        (d.healthy ? 'This does not mean the plant is healthy: look at the leaf closely, or add another leaf.'
+          : 'Compare the signs below before you act, or add another leaf.');
     } else if (outcome === 'confident') {
-      text = d.healthy
+      text = agreed + (d.healthy
         ? 'No disease seen in this photo. Early signs can be missed, so check the plant again in 3 to 5 days.'
-        : `On test photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`;
+        : `On test photos, results this sure${among} were right about ${rate.confident} in 10 times. Compare the signs below before you act.`);
     } else if (outcome === 'moderate') {
       const alt = ranked[1] ? present(ranked[1]) : null;
-      text = `Results this sure${among} were right about ${rate.moderate} in 10 times.` +
+      text = (differs ? `On test photos where the two disagreed, answers like this${among} were right about ${rate.moderate} in 10 times.`
+        : `${agreed}Results this sure${among} were right about ${rate.moderate} in 10 times.`) +
         (alt && el.shortlist.hidden ? ` It could also be ${shortName(alt, d)}.` : '') +
         (plantLock ? ' Answer the questions below, or add another leaf.'
           : ' Answer the questions below, add another leaf, or choose the plant above if it is wrong.');
     } else {
-      text = `LeafScan is not sure: guesses like this were right only about ${rate.unsure} in 10 times. ` +
+      text = (differs ? `LeafScan is not sure, and its second copy disagrees: guesses like this were right only about ${rate.unsure} in 10 times. `
+        : second ? `LeafScan is not sure, although a second copy of the model, trained separately, gave the same answer: guesses like this were right about ${rate.unsure} in 10 times. `
+          : `LeafScan is not sure: guesses like this were right only about ${rate.unsure} in 10 times. `) +
         'This does not mean the plant is healthy. Move the square onto one leaf, retake it in even light, or add another leaf.' +
         (plantLock ? '' : ' If the plant is wrong, choose the right one above.');
     }
@@ -1987,7 +2097,8 @@
     'leafscan_result', 'leafscan_confidence', 'leafscan_plant_chosen_by_user', 'leafscan_model',
     'plant_given', 'leafscan_result_plant_given', 'leafscan_confidence_plant_given', 'leafscan_shortlist',
     'guess_written', 'expert_saw_leafscan',
-    'code', 'photo_set', 'site_code', 'crop_code', 'problem_code', 'plant_no', 'leaf_no', 'label_tier'];
+    'code', 'photo_set', 'site_code', 'crop_code', 'problem_code', 'plant_no', 'leaf_no', 'label_tier',
+    'leafscan_second_model', 'leafscan_second_result', 'leafscan_second_agrees'];
   const REMEMBERED = ['barangay', 'municipality', 'province', 'site', 'background', 'light', 'phone',
     'photoSet', 'siteCode', 'crop', 'plantNo', 'leafNo'];
   let studySavedFor = null; // the photo whose entry has been saved, so it is not saved twice
@@ -2212,6 +2323,8 @@
         plantGiven: given, resultPlantGiven: answer ? answer.id : '', confidencePlantGiven: answer ? answer.p : '',
         shortlist: (current.shortlist || []).map((s) => labels[s.i].id).join('; '),
         guessWhen: f.guessWhen ? f.guessWhen.value : '', expertSaw: '',
+        secondModel: current.second ? secondVersion : '', secondResult: current.second ? labels[current.second.top.i].id : '',
+        secondAgrees: current.second ? (current.second.agree ? 'yes' : 'no') : '',
         code, photoSet: f.photoSet.value, siteCode: code ? f.siteCode.value : '', crop: code ? f.crop.value : '',
         problem: code ? f.problem.value : '', plantNo: code ? f.plantNo.value : '', leafNo: code ? f.leafNo.value : '',
         tier: code ? (problemsOf(cropOf(f.crop.value)).find((x) => x.code === f.problem.value) || {}).tier || '' : '',
@@ -2328,7 +2441,7 @@
       x.result, x.confidence, x.plantChosen, x.model, x.plantGiven || '', x.resultPlantGiven || '',
       x.confidencePlantGiven || '', x.shortlist || '', x.guessWhen || '', x.expertSaw || '',
       x.code || '', x.photoSet || '', x.siteCode || '', x.crop || '', x.problem || '', x.plantNo || '', x.leafNo || '',
-      x.tier || '']);
+      x.tier || '', x.secondModel || '', x.secondResult || '', x.secondAgrees || '']);
     const csv = [STUDY_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
     const files = [{ name: 'photo_log.csv', data: new TextEncoder().encode('﻿' + csv) }];
     for (const x of entries) files.push({ name: `photos/${x.photoFile}`, data: new Uint8Array(await x.photo.arrayBuffer()) });

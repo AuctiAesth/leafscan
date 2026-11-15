@@ -1,0 +1,29 @@
+{
+ "version": "v4s7-int8",
+ "source": "second_v4b_s7_int8w.onnx",
+ "bytes": 4941250,
+ "sha256": "5da48f88a5448aca09b3760f66a6f9a236ff761adb25fff0abb5e65c3b343b6c",
+ "parts": [
+  {
+   "file": "part-000.bin",
+   "bytes": 2097152,
+   "sha256": "ee252ea3e3131eb120ac2b1a443ae2e2a9c67c31504a00cfb51d305801b7d69b"
+  },
+  {
+   "file": "part-001.bin",
+   "bytes": 2097152,
+   "sha256": "51bcf9613da65b2d2f0f68ac76a7c9caff33fbb0c7aeb4a60ca05753b3d3860e"
+  },
+  {
+   "file": "part-002.bin",
+   "bytes": 746946,
+   "sha256": "9f5dec2b965bcd3ad0f65ac09d1cf6e75c16ba9f2d47f8b664eb4f49bd92df14"
+  }
+ ],
+ "runtime": {
+  "file": "vendor/ort-wasm-simd-threaded.wasm",
+  "cache": "leafscan-runtime-1.29.0",
+  "bytes": 13961845,
+  "sha256": "ec8580a9d7b9476ceee52e10a7f94124e4dc71a019d666ed6d4726697c109a4d"
+ }
+}
