@@ -116,7 +116,7 @@
     studyBox: $('studyBox'), studyForm: $('studyForm'), studySave: $('studySave'), studyNote: $('studyNote'),
     studyLog: $('studyLog'), studyCount: $('studyCount'), studyExport: $('studyExport'), studyList: $('studyList'),
     studyExportNote: $('studyExportNote'), studyClear: $('studyClear'), studyToggle: $('studyToggle'),
-    studyCode: $('studyCode'), studyCodeText: $('studyCodeText'), studyCheck: $('studyCheck'),
+    studyCode: $('studyCode'), studyCodeText: $('studyCodeText'), studyCheck: $('studyCheck'), studyInApp: $('studyInApp'),
     brandBtn: $('brandBtn'), navrow: $('navrow'), tabs: [...document.querySelectorAll('#navrow [data-view]')],
     intro: $('intro'), introFacts: $('introFacts'), historyCount: $('historyCount'), historyEmpty: $('historyEmpty'),
     plantFilter: $('plantFilter'), plantsLede: $('plantsLede'), plantsEmpty: $('plantsEmpty'),
@@ -2205,21 +2205,65 @@
 
   function studyDb() {
     return new Promise((resolve, reject) => {
+      if (!self.indexedDB) { reject(new Error('this browser has no storage for the study log')); return; }
       const req = indexedDB.open('leafscan-study', 1);
       req.onupgradeneeded = () => req.result.createObjectStore('entries', { keyPath: 'id', autoIncrement: true });
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('the study log is open in another LeafScan tab'));
     });
   }
 
-  async function studyTx(mode, fn) {
-    const db = await studyDb();
-    return new Promise((resolve, reject) => {
+  // Some in-app browsers never answer a storage request: give up after a while instead of waiting forever.
+  const STUDY_TIMEOUT = 15000;
+  function studyTx(mode, fn) {
+    let timer;
+    const work = studyDb().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction('entries', mode);
       const out = fn(tx.objectStore('entries'));
       tx.oncomplete = () => { db.close(); resolve(out && 'result' in out ? out.result : undefined); };
       tx.onerror = () => { db.close(); reject(tx.error); };
-    });
+      tx.onabort = () => { db.close(); reject(tx.error || new Error('the save was cancelled by the browser')); };
+    }));
+    const late = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the browser did not answer')), STUDY_TIMEOUT); });
+    return Promise.race([work, late]).finally(() => clearTimeout(timer));
+  }
+
+  // Messenger, Facebook, Instagram and similar apps open links in their own browser, whose storage can be cleared
+  // when the app closes: the study log would be lost.
+  const IN_APP = /FBAN|FBAV|FB_IAB|FBIOS|Messenger|Instagram|Line\/|MicroMessenger|TikTok|Snapchat|; wv\)/i.test(navigator.userAgent);
+
+  // What still has to be filled in before a photo of a study crop can be saved, with the field to point at.
+  function studyMissing() {
+    const f = el.studyForm.elements;
+    if (!f.crop.value) return [];
+    const miss = [];
+    if (!f.problem.value) miss.push(['problem', 'choose the Problem (it starts empty for every photo)']);
+    if (!siteOk(f.siteCode.value)) miss.push(['siteCode', 'type the Site code: your letter and a number, such as B2']);
+    const n = parseInt(f.plantNo.value, 10);
+    if (!(n >= 1 && n <= 99)) miss.push(['plantNo', 'type the Plant no. (1 to 99)']);
+    return miss;
+  }
+
+  function studySay(text, kind = '') {
+    el.studyNote.textContent = text;
+    el.studyNote.className = `study-note${kind ? ` ${kind}` : ''}`;
+  }
+
+  function markMissing(names) {
+    const f = el.studyForm.elements;
+    for (const k of ['problem', 'siteCode', 'plantNo', 'leafNo']) {
+      f[k].classList.toggle('missing', names.includes(k));
+      f[k].setAttribute('aria-invalid', String(names.includes(k)));
+    }
+  }
+  for (const k of ['problem', 'siteCode', 'plantNo', 'leafNo']) {
+    for (const ev of ['input', 'change']) {
+      el.studyForm.elements[k].addEventListener(ev, () => {
+        el.studyForm.elements[k].classList.remove('missing');
+        el.studyForm.elements[k].setAttribute('aria-invalid', 'false');
+      });
+    }
   }
 
   const studyAll = () => studyTx('readonly', (s) => s.getAll());
@@ -2254,6 +2298,7 @@
     const on = studyOn() && !!current && !!source;
     el.studyBox.hidden = !on;
     if (!on) return;
+    el.studyInApp.hidden = !IN_APP;
     const f = el.studyForm.elements;
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(STUDY_DEFAULTS_KEY)) || {}; } catch { saved = {}; }
@@ -2274,30 +2319,45 @@
       f.notes.value = '';
       el.studySave.disabled = false;
       el.studySave.textContent = 'Save to study log';
-      el.studyNote.textContent = '';
+      studySay('');
+      markMissing([]);
     }
     renderStudyCode();
   }
 
   el.studyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!current || !source || studySavedFor === source.id) return;
-    const f = el.studyForm.elements;
-    const val = (k) => f[k].value.trim();
-    const code = studyCode();
-    if (f.crop.value && !code) {
-      el.studyNote.textContent = 'Choose the problem, a site code (letter + number, e.g. B2) and the plant no. first.';
+    if (!current || !source) return;
+    if (studySavedFor === source.id) {
+      studySay('This photo is already saved. Take or choose the next photo to save another.', 'ok');
       return;
     }
+    const f = el.studyForm.elements;
+    const val = (k) => f[k].value.trim();
+    const missing = studyMissing();
+    markMissing(missing.map((m) => m[0]));
+    if (missing.length) {
+      studySay(`Not saved yet: ${missing.map((m) => m[1]).join('; ')}.`, 'warn');
+      const first = f[missing[0][0]];
+      first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      first.focus({ preventScroll: true });
+      return;
+    }
+    const code = studyCode();
     try {
       localStorage.setItem(STUDY_DEFAULTS_KEY, JSON.stringify(Object.fromEntries(REMEMBERED.map((k) => [k, val(k)]))));
     } catch { /* optional */ }
     el.studySave.disabled = true;
+    el.studySave.textContent = 'Saving…';
+    studySay('');
     try {
       const entries = await studyAll();
       if (code && entries.some((x) => x.code === code)) {
         el.studySave.disabled = false;
-        el.studyNote.textContent = `${code} is already in the study log: check the plant no. and leaf.`;
+        el.studySave.textContent = 'Save to study log';
+        markMissing(['plantNo', 'leafNo']);
+        studySay(`Not saved: ${code} is already in the study log. Change the Plant no. or the Leaf.`, 'warn');
+        f.plantNo.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
       const plantEn = (val('plant').split('/').pop() || 'leaf').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'leaf';
@@ -2317,6 +2377,7 @@
         plantChosen: plantLock || '', model: modelVersion,
         thumb: leaf ? leaf.thumb : '', photo: await photoBlob(),
       };
+      if (!entry.photo) throw new Error('the photo could not be copied on this phone');
       const given = plantLock && plantLock !== OTHER_PLANT ? plantLock : hostFromPlantText(val('plant'));
       const answer = plantGivenAnswer(given);
       Object.assign(entry, {
@@ -2332,7 +2393,8 @@
       await studyTx('readwrite', (s) => s.add(entry));
       studySavedFor = source.id;
       el.studySave.textContent = 'Saved';
-      el.studyNote.textContent = `Saved as ${entry.photoFile} (${entries.length + 1} in the study log).`;
+      markMissing([]);
+      studySay(`Saved as ${entry.photoFile} (${entries.length + 1} in the study log).`, 'ok');
       if (code) {
         nextLeaf();
         try {
@@ -2343,7 +2405,10 @@
     } catch (err) {
       console.error(err);
       el.studySave.disabled = false;
-      el.studyNote.textContent = 'Could not save on this phone (storage may be full).';
+      el.studySave.textContent = 'Save to study log';
+      studySay(`Not saved: ${(err && err.message) || 'the phone refused'}. ` +
+        (IN_APP ? 'Open LeafScan in Chrome or Safari and try again.'
+          : 'Close other LeafScan tabs, free some space on the phone, and try again.'), 'warn');
     }
   });
 

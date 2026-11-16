@@ -239,7 +239,8 @@
         <section class="study" id="studyBox" hidden aria-labelledby="studyTitle">
           <h3 id="studyTitle">Study log</h3>
           <p class="small muted">Study mode is on. Fill in what you know and save; the photo and these details stay on this phone until you export them from History. For the study crops, choose the crop and problem from the lists (the codes and checks are in the team's Field ID Key) before reading LeafScan's answer; for other plants, type the real plant. The log also records LeafScan's answer when it is told the plant.</p>
-          <form id="studyForm" class="study-form">
+          <form id="studyForm" class="study-form" novalidate>
+            <p id="studyInApp" class="study-warn wide" hidden>You opened LeafScan inside another app (such as Messenger or Facebook). Photos saved here can be lost when that app closes. Tap the menu (⋮ or …) and choose <b>Open in Chrome</b> or <b>Open in Safari</b>, then use Study mode there.</p>
             <label>Photo set<select name="photoSet"><option value="">(choose)</option><option value="test">test (random sample)</option><option value="training">training (chosen on purpose)</option></select></label>
             <label>Site code<input name="siteCode" autocomplete="off" placeholder="e.g. B2" maxlength="3"></label>
             <label>Crop<select name="crop"><option value="">(other plant)</option></select></label>
@@ -264,7 +265,7 @@
             <label class="wide">Notes<input name="notes" autocomplete="off"></label>
             <div class="study-actions wide">
               <button id="studySave" class="btn btn-primary" type="submit">Save to study log</button>
-              <span id="studyNote" class="small" role="status"></span>
+              <span id="studyNote" class="study-note" role="status" aria-live="polite"></span>
             </div>
           </form>
         </section>
