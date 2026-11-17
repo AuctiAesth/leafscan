@@ -3,9 +3,11 @@
 //   leafscan-runtime-<ver>  ONNX Runtime (core about 14 MB, stored by the page); kept until the runtime changes
 //   leafscan-model-<ver>    the model's parts; written by the page itself (app.js), never touched here
 //   leafscan-lesion-<ver>   the diseased-spots model's parts, downloaded only when asked; same rules
-// The page registers this worker only after the model has loaded, so these files come from the browser's
-// own HTTP cache rather than being downloaded a second time.
-const APP_CACHE = 'leafscan-app-24';
+// The page registers this worker only after the model has loaded. The small app files are always checked with
+// the server ('no-cache': an unchanged file costs a short 304 reply, not a second download), because GitHub Pages
+// lets browsers keep files for 10 minutes: without the check, an update published in those minutes could store the
+// new page with the old app.js.
+const APP_CACHE = 'leafscan-app-25';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',
@@ -40,7 +42,7 @@ const CACHE_FIRST = /\.(wasm|mjs|png|svg|woff2)$|\/vendor\//;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(Promise.all([
-    caches.open(APP_CACHE).then((cache) => cache.addAll(APP_FILES)),
+    caches.open(APP_CACHE).then((cache) => cache.addAll(APP_FILES.map((f) => new Request(f, { cache: 'no-cache' })))),
     // Runtime files are fetched only if this version of them is not stored yet.
     caches.open(RUNTIME_CACHE).then(async (cache) => {
       const missing = [];
@@ -58,8 +60,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-function fetchAndStore(request, cacheName) {
-  return fetch(request).then((res) => {
+function fetchAndStore(request, cacheName, check = false) {
+  // A page navigation cannot be copied with new options, so it is fetched again by its address.
+  const fresh = !check ? request : request.mode === 'navigate' ? new Request(request.url, { cache: 'no-cache', redirect: 'manual' })
+    : new Request(request, { cache: 'no-cache' });
+  return fetch(fresh).then((res) => {
     if (res.ok && res.type === 'basic') {
       const copy = res.clone();
       caches.open(cacheName).then((cache) => cache.put(request, copy));
@@ -80,7 +85,7 @@ self.addEventListener('fetch', (event) => {
     const store = url.pathname.includes('/vendor/') ? RUNTIME_CACHE : APP_CACHE;
     event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetchAndStore(request, store)));
   } else {
-    event.respondWith(fetchAndStore(request, APP_CACHE).catch(() =>
+    event.respondWith(fetchAndStore(request, APP_CACHE, true).catch(() =>
       caches.match(request, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html'))));
   }
 });
