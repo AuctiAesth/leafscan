@@ -187,7 +187,7 @@
     showView(it.url);
     const crop = cropOf(it.crop);
     const h = kb.hosts[crop.host] || {};
-    el.crop.textContent = `${crop.code} · ${[h.fil, h.en].filter(Boolean).join(' / ')}: what problem do you see?`;
+    el.crop.textContent = `${crop.code} · ${crop.name || [h.fil, h.en].filter(Boolean).join(' / ')}: what problem do you see?`;
     el.problems.replaceChildren(...problemsOf(crop).map((p) => {
       const b = document.createElement('button');
       b.type = 'button';

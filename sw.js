@@ -7,7 +7,7 @@
 // the server ('no-cache': an unchanged file costs a short 304 reply, not a second download), because GitHub Pages
 // lets browsers keep files for 10 minutes: without the check, an update published in those minutes could store the
 // new page with the old app.js.
-const APP_CACHE = 'leafscan-app-25';
+const APP_CACHE = 'leafscan-app-26';
 const RUNTIME_CACHE = 'leafscan-runtime-1.29.0';
 const APP_FILES = [
   './',

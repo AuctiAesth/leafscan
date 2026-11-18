@@ -1,5 +1,5 @@
 {
- "about": "Crop and problem codes for the team's field photos (CROP-PROBLEM-SITE-PLANT-LEAF). Used by Study mode in app.js and by kb/make_field_key.py. 'id' is the knowledge-base record whose cited description the labeller checks against; null means LeafScan has no cited description. Tiers are the team's guidance on how reliable a by-eye label is, not part of the sources.",
+ "about": "Crop and problem codes for the team's field photos (CROP-PROBLEM-SITE-PLANT-LEAF). Used by Study mode in app.js and by kb/make_field_key.py. 'id' is the knowledge-base record whose cited description the labeller checks against; null means LeafScan has no cited description. Tiers are the team's guidance on how reliable a by-eye label is, not part of the sources. 'name' (optional) is the crop's name in the pick lists when it differs from the knowledge base's plant name (sili is learned from bell pepper, the same species).",
  "tiers": {
   "A": "Sign visible: the insect, mite, powder or pustules themselves can be seen. Label it only if you see the sign.",
   "B": "Pattern: the spots or damage match a published description, but look-alikes exist. Two members must agree.",
@@ -46,6 +46,22 @@
    {"code": "LCM", "id": "squash/leaf-curl-mosaic", "tier": "C"},
    {"code": "YMV", "id": "zucchini/yellow-mosaic", "tier": "C"},
    {"code": "WLT", "id": "zucchini/bacterial-wilt", "tier": "C"},
+   {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]},
+  {"code": "SIL", "host": "bell_pepper", "name": "Sili / Pepper", "problems": [
+   {"code": "HLT", "id": "bell_pepper/healthy"},
+   {"code": "PWM", "id": "bell_pepper/powdery-mildew", "tier": "A"},
+   {"code": "BAC", "id": "bell_pepper/bacterial-spot", "tier": "B"},
+   {"code": "FRG", "id": "bell_pepper/frogeye-leaf-spot", "tier": "B"},
+   {"code": "BER", "id": "bell_pepper/blossom-end-rot", "tier": "B"},
+   {"code": "LCL", "id": "pepper/leaf-curl", "tier": "C"},
+   {"code": "BWL", "id": "ph/bacterial-wilt", "tier": "C"},
+   {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]},
+  {"code": "TAB", "host": "tobacco", "name": "Tabako / Tobacco", "problems": [
+   {"code": "HLT", "id": "tobacco/healthy"},
+   {"code": "BMO", "id": "tobacco/blue-mold", "tier": "A"},
+   {"code": "BRS", "id": "tobacco/brown-spot", "tier": "B"},
+   {"code": "FRG", "id": "tobacco/frogeye-leaf-spot", "tier": "B"},
+   {"code": "MOS", "id": "tobacco/mosaic", "tier": "C"},
    {"code": "NUT", "id": null, "en": "Nutrient deficiency", "tier": "C"}]},
   {"code": "PAL", "host": "rice", "problems": [
    {"code": "HLT", "id": "rice/healthy"},

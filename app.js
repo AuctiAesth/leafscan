@@ -2121,13 +2121,17 @@
     return r ? (r.name || r.en) : p.en;
   }
 
+  // A crop's name in the pick lists: its own name when the code list gives one (sili is learned from bell pepper,
+  // the same species), else the knowledge base's plant names.
+  function cropName(c) {
+    const h = kb.hosts[c.host] || {};
+    return c.name || [h.fil, h.en].filter(Boolean).join(' / ');
+  }
+
   function fillCropSelect() {
     const f = el.studyForm.elements;
     if (!fieldCodes || f.crop.options.length > 1) return;
-    for (const c of fieldCodes.crops) {
-      const h = kb.hosts[c.host] || {};
-      f.crop.append(new Option(`${c.code} · ${[h.fil, h.en].filter(Boolean).join(' / ')}`, c.code));
-    }
+    for (const c of fieldCodes.crops) f.crop.append(new Option(`${c.code} · ${cropName(c)}`, c.code));
   }
 
   function fillProblemSelect() {
@@ -2167,10 +2171,7 @@
     const f = el.studyForm.elements;
     const crop = cropOf(f.crop.value);
     fillProblemSelect();
-    if (crop) {
-      const h = kb.hosts[crop.host] || {};
-      f.plant.value = [h.fil, h.en].filter(Boolean).join(' / ');
-    }
+    if (crop) f.plant.value = cropName(crop);
     renderStudyCode();
   });
   el.studyForm.elements.problem.addEventListener('change', () => {
@@ -2310,8 +2311,8 @@
       // With a crop chosen, the plant comes from the pick list and the problem is chosen afresh for every photo,
       // never carried over and never taken from LeafScan's answer.
       const crop = cropOf(f.crop.value);
-      const h = crop ? kb.hosts[crop.host] : current.outcome === 'uncovered' ? null : kb.hosts[current.d.host];
-      f.plant.value = h ? [h.fil, h.en].filter(Boolean).join(' / ') : '';
+      const h = current.outcome === 'uncovered' ? null : kb.hosts[current.d.host];
+      f.plant.value = crop ? cropName(crop) : h ? [h.fil, h.en].filter(Boolean).join(' / ') : '';
       f.healthy.value = crop ? '' : current.d.healthy && current.outcome !== 'unknown' ? 'healthy' : 'sick';
       f.problem.value = '';
       f.guess.value = '';
